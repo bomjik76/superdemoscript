@@ -24,7 +24,9 @@ show_menu() {
     echo "16. Установить Webmin"
     echo "17. Установить Adminer"
     echo "18. Установить WordPress"
-    echo "19. Выход"
+    echo "19. Установить LMS Apache"
+    echo "20. Установить MediaWiki"
+    echo "21. Выход"
     echo "============================================"
 }
 
@@ -691,10 +693,148 @@ install_wordpress() {
     echo "Установка WordPress завершена. Перейдите по адресу $SITE_URL для проверки."
 }
 
+# Функция установки и настройки веб-сервера LMS Apache
+install_lms_apache() {
+    echo "Установка и настройка веб-сервера LMS Apache..."
+
+    # Настройка SELinux
+    echo "Настройка SELinux..."
+    sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config
+    setenforce 0
+
+    # Установка веб-сервера Apache
+    echo "Установка Apache..."
+    dnf install -y httpd
+
+    # Запуск службы httpd и добавление в автозагрузку
+    echo "Запуск и включение службы Apache..."
+    systemctl enable httpd --now
+
+    # Проверка успешной установки Apache
+    echo "Проверка установки Apache..."
+    if systemctl status httpd | grep "active (running)"; then
+        echo "Apache успешно установлен и запущен."
+    else
+        echo "Ошибка: Apache не запущен."
+        exit 1
+    fi
+
+    dnf install -y php83-release
+    dnf clean all
+    dnf makecache
+    dnf update php*
+
+    # Установка PHP и необходимых расширений
+    echo "Установка PHP и необходимых расширений..."
+    dnf install -y php php-mysqlnd php-pdo php-gd php-mbstring php-zip php-intl php-soap
+
+    # Настройка php.ini
+    echo "Настройка php.ini..."
+    sed -i '8i max_input_vars=6000' /etc/php.ini
+
+    systemctl restart httpd
+    systemctl restart php-fpm
+
+    # Установка и настройка MariaDB
+    echo "Установка и настройка MariaDB..."
+    dnf install -y mariadb-server mariadb
+    systemctl enable mariadb --now
+
+    mysql_secure_installation
+
+    # Создание базы данных и пользователя
+    echo "Создание базы данных и пользователя для LMS..."
+    mysql -e "CREATE DATABASE moodledb DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci;"
+    mysql -e "CREATE USER 'moodleuser'@'localhost' IDENTIFIED BY 'QWEasd11';"
+    mysql -e "GRANT ALL ON moodledb.* TO 'moodleuser'@'localhost';"
+    mysql -e "FLUSH PRIVILEGES;"
+
+    # Установка Moodle
+    echo "Установка Moodle..."
+    wget https://packaging.moodle.org/stable405/moodle-latest-405.tgz -P /tmp
+    tar -xzf /tmp/moodle-latest-405.tgz -C /var/www/html
+    chown -R apache:apache /var/www/html/moodle
+    chmod -R 0755 /var/www/html/moodle
+
+    # Создание каталога данных для Moodle
+    echo "Создание каталога данных для Moodle..."
+    mkdir /var/moodledata
+    chown -R apache:apache /var/moodledata
+    chmod -R 0755 /var/moodledata
+
+    # Перезапуск Apache
+    echo "Перезапуск Apache..."
+    systemctl restart httpd
+
+    echo "Установка и настройка LMS Apache завершены. Перейдите по адресу http://<IP-сервера>/moodle для завершения настройки."
+}
+
+# Функция установки и настройки MediaWiki с использованием Docker
+install_mediawiki() {
+    echo "Установка и настройка MediaWiki с использованием Docker..."
+
+    # Установка Docker и Docker Compose
+    echo "Установка Docker..."
+    dnf install -y docker-ce docker-ce-cli
+    systemctl enable docker --now
+
+    echo "Установка Docker Compose..."
+    dnf install -y docker-compose
+
+    # Создание файла docker-compose.yml
+    echo "Создание файла docker-compose.yml..."
+    cat <<EOL > ~/wiki.yml
+services:
+  MediaWiki:
+    container_name: wiki
+    image: mediawiki
+    restart: always
+    ports:
+      - 8081:80
+    links:
+      - database
+    volumes:
+      - images:/var/www/html/images
+      # - ./LocalSettings.php:/var/www/html/LocalSettings.php
+  database:
+    container_name: db
+    image: mysql
+    environment:
+      MYSQL_DATABASE: mediawiki
+      MYSQL_USER: wiki
+      MYSQL_PASSWORD: P@ssw0rd
+      MYSQL_RANDOM_ROOT_PASSWORD: 'yes'
+    volumes:
+      - dbvolume:/var/lib/mysql
+volumes:
+  dbvolume:
+      external: true
+  images:
+
+EOL
+
+    # Создание volume для базы данных
+    echo "Создание volume для базы данных..."
+    docker volume create dbvolume
+
+    # Запуск стека контейнеров
+    echo "Запуск MediaWiki и базы данных..."
+    docker-compose -f ~/wiki.yml up -d
+
+    # Проверка доступности MediaWiki
+    echo "Проверка доступности MediaWiki на порту 8081..."
+    if curl -s --head http://localhost:8081 | grep "200 OK" > /dev/null; then
+        echo "MediaWiki доступен по адресу http://localhost:8081"
+    else
+        echo "Ошибка: MediaWiki недоступен."
+        exit 1
+    fi
+}
+
 # Основной цикл меню
 while true; do
     show_menu
-    read -p "Выберите пункт меню (1-19): " choice
+    read -p "Выберите пункт меню (1-21): " choice
     case $choice in
         1) configure_hostname ;;
         2) configure_network ;;
@@ -714,7 +854,9 @@ while true; do
         16) install_webmin ;;
         17) install_adminer ;;
         18) install_wordpress ;;
-        19) echo "Выход из программы..."; exit 0 ;;
+        19) install_lms_apache ;;
+        20) install_mediawiki ;;
+        21) echo "Выход из программы..."; exit 0 ;;
         *) echo "Неверный выбор. Нажмите Enter для продолжения..."; read ;;
     esac
 done 
