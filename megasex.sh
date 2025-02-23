@@ -16,30 +16,36 @@ show_menu() {
     echo "8. Создать системного пользователя"
     echo "9. Настроить SSH"
     echo "10. Настроить CUPS"
-    echo "11. Настроить RAID"
+    echo "11. Настроить клиента CUPS"
     echo "12. Настроить NFS"
-    echo "13. Проверка IP и пинга ya.ru"
+    echo "13. Настроить клиента NFS"
     echo "14. Настроить Chrony"
-    echo "15. Создать backup скрипт"
-    echo "16. Установить Webmin"
-    echo "17. Установить Adminer"
-    echo "18. Установить WordPress"
-    echo "19. Установить LMS Apache"
-    echo "20. Установить MediaWiki"
-    echo "21. Выход"
+    echo "15. Настроить клиента Chrony"
+    echo "16. Установить PostgreSQL и pgAdmin4"
+    echo "17. Создать backup скрипт"
+    echo "18. Установить Webmin"
+    echo "19. Установить Adminer"
+    echo "20. Установить WordPress"
+    echo "21. Установить LMS Apache"
+    echo "22. Установить MediaWiki"
+    echo "23. Установить сервер IPA"
+    echo "24. Настроить RAID1"
+    echo "25. Проверка IP и пинга ya.ru"
+    echo "26. Выход"
     echo "============================================"
 }
 
-# Переменные по умолчанию
+# HOSTNAME 
 HOSTNAME="isp"
+#INTERFACE
 INTERFACE_1="enp0s3"
 INTERFACE_2="enp0s8"
 INTERFACE_3="enp0s9"
+#IP
 IP2="22.22.22.1/28"
 IP3="11.11.0.1/27"
+#TIMEZONE
 TIMEZONE="Europe/Moscow"
-
-# Дополнительные переменные по умолчанию
 # DHCP параметры
 DHCP_SUBNET="192.168.1.0"
 DHCP_NETMASK="255.255.255.224"
@@ -47,33 +53,29 @@ DHCP_RANGE="192.168.1.2 192.168.1.30"
 DHCP_ROUTER="192.168.1.1"
 DHCP_DNS="192.168.2.2"
 DHCP_DOMAIN="demo.rtk"
-
 # GRE туннель параметры
 LOCAL_IP="22.22.22.2"
 REMOTE_IP="11.11.0.2"
 TUNNEL_LOCAL_IP="10.10.10.1/30"
 TUNNEL_REMOTE_IP="10.10.10.2"
 TUNNEL_NAME="gre-tunnel0"
+#СЕТИ
 NETWORK_Left="192.168.1.0/27"
 NETWORK_Right="172.16.0.0/24"
 NETWORK_2="192.168.2.0/29"
 NETWORK_TUNNEL="10.10.10.0/30"
-
 # Параметры пользователя
 USERNAME_NET="net_user"
 PASSWORD_NET="P@\$\$word"
 USER_ID="1111"
 USERNAME_SSH="ssh_user"
-PASSWORD_SSH="P@ssw0rd"
-USER_ID_SSH="1030"
-
 # Добавляем новые переменные
 PORT_SSH=2222
 POPITKA=3
 BANNER_PATH="/etc/ssh-banner"
-
+#backup
 BACKUP_DIR=/var/backup
-# Переменные
+# Переменные wordpress
 DB_NAME="wordpress"
 DB_USER="wpuser"
 DB_PASS="P@ssw0rd"
@@ -82,6 +84,30 @@ ADMIN_PASS="P@ssw0rd"
 ADMIN_EMAIL="admin@example.com"
 SITE_TITLE="C1-21 - Pavel"
 SITE_URL="http://192.168.220.5"
+#CHRONY
+local_stratum=6
+#RAID
+DISK1="/dev/sdb"
+DISK2="/dev/sdc"
+RAID_DEVICE="/dev/md0"
+MDADM_CONFIG="/etc/mdadm.conf"
+MOUNT_DIR="/obmen"
+#NFS
+NFS_DIR="/obmen/nfs"
+EXPORTS_FILE="/etc/exports"
+#клиент cups
+CUPS_IP="22.22.22.2"  # Укажите IP-адрес CUPS
+PRINTER_NAME="Virtual_PDF_Printer"
+#client NFS
+NFS_SERVER="22.22.22.2"  # IP адрес сервера NFS
+NFS_EXPORT="/obmen/nfs"  # Экспортированная папка на сервере
+MOUNT_DIR="/mnt/nfs"     # Точка монтирования на клиенте
+# клиент CHRONY
+CHRONY_SERVER="172.16.220.1"
+#PostgreSQL и pgAdmin4
+EMAIL="pasha@gmail.com"
+ADMIN_PASSWORD="QWEasd11"
+POSTGRES_PASSWORD="QWEasd11"
 
 # Функция настройки имени хоста
 configure_hostname() {
@@ -191,6 +217,8 @@ subnet $DHCP_SUBNET netmask $DHCP_NETMASK {
     option routers $DHCP_ROUTER;
     option domain-name-servers $DHCP_DNS;
     option domain-name "$DHCP_DOMAIN";
+    default-lease-time 600;
+    max-lease-time 7200;
 }
 EOF
     systemctl enable --now dhcpd
@@ -244,8 +272,6 @@ configure_user() {
 
 # Функция настройки SSH
 configure_ssh() {
-    echo "Настройка SSH"
-    
     # Запрос необходимых переменных
     read -p "Введите порт SSH (по умолчанию: $PORT_SSH): " new_port
     read -p "Введите имя пользователя для SSH (по умолчанию: $USERNAME_SSH): " new_username
@@ -271,8 +297,6 @@ configure_ssh() {
 
     # Перезапуск службы SSH для применения изменений
     systemctl restart sshd
-
-    echo "Настройка SSH завершена."
 }
 
 # Функция настройки FRR
@@ -316,6 +340,7 @@ passive-interface default
 network $NETWORK_TUNNEL area 0
 network $NETWORK_Left area 0
 network $NETWORK_2 area 0
+area 0 authentication
 exit
 !
 EOL
@@ -334,11 +359,9 @@ configure_cups() {
         echo "Ошибка: Не удалось установить пакеты. Проверьте подключение к репозиторию." >&2
         exit 1
     }
-
     # Запуск службы CUPS
     systemctl enable cups
     systemctl start cups
-
     # Настройка виртуального PDF-принтера
     PDF_PRINTER_NAME="Virtual_PDF_Printer"
     lpadmin -p "$PDF_PRINTER_NAME" -E -v cups-pdf:/ -m drv:///sample.drv/generic.ppd || {
@@ -363,11 +386,9 @@ configure_cups() {
     sed -i 's/<Location \/admin>/<Location \/admin>\n  Allow All\n/g' $CUPS_CONF
     sed -i 's/<Location \/admin\/log>/<Location \/admin\/log>\n  Allow All\n/g' $CUPS_CONF
     sed -i 's/<Location \/admin\/conf>/<Location \/admin\/conf>\n  Allow All\n/g' $CUPS_CONF
-
     # Перезапуск службы CUPS
     echo "Перезапускаем службу CUPS для применения изменений..."
     systemctl restart cups
-
     # Проверка статуса
     systemctl status cups --no-pager
     if [ $? -eq 0 ]; then
@@ -381,16 +402,33 @@ configure_cups() {
     echo "Настройка CUPS завершена."
 }
 
-# Функция настройки RAID
-configure_raid() {
-    echo "Настройка RAID массива"
-
+# Функция настройки клиента CUPS
+configure_cups_client() {
     # Запрос необходимых переменных
-    read -p "Введите первый диск для RAID (например, /dev/sdb): " DISK1
-    read -p "Введите второй диск для RAID (например, /dev/sdc): " DISK2
-    read -p "Введите точку монтирования (например, /obmen): " MOUNT_DIR
-    read -p "Введите имя RAID устройства (например, /dev/md0): " RAID_DEVICE
-    MDADM_CONFIG="/etc/mdadm.conf"
+    read -p "Введите IP-адрес CUPS (по умолчанию: $CUPS_IP): " input_CUPS_IP
+    read -p "Введите имя принтера (по умолчанию: $PRINTER_NAME): " input_printer_name
+    CUPS_IP=${input_CUPS_IP:-$CUPS_IP}
+    PRINTER_NAME=${input_printer_name:-$PRINTER_NAME}
+    # Установка клиента CUPS
+    dnf install -y cups-client
+    # Настройка подключения к принтеру
+    lpadmin -p "$PRINTER_NAME" -E -v ipp://$CUPS_IP:631/printers/$PRINTER_NAME
+    lpadmin -d "$PRINTER_NAME"
+    echo "Принтер $PRINTER_NAME настроен как принтер по умолчанию."
+}
+
+# Функция настройки RAID
+configure_raid1() {
+    # Запрос необходимых переменных
+    read -p "Введите первый диск для RAID (по умолчанию: $DISK1): " input_disk1
+    read -p "Введите второй диск для RAID (по умолчанию: $DISK2): " input_disk2
+    read -p "Введите точку монтирования (по умолчанию: $MOUNT_DIR): " input_mount_dir
+    read -p "Введите имя RAID устройства (по умолчанию: $RAID_DEVICE): " input_raid_device
+
+    DISK1=${input_disk1:-$DISK1}
+    DISK2=${input_disk2:-$DISK2}
+    MOUNT_DIR=${input_mount_dir:-$MOUNT_DIR}
+    RAID_DEVICE=${input_raid_device:-$RAID_DEVICE}
 
     # Установка необходимых пакетов
     dnf install -y mdadm
@@ -415,17 +453,14 @@ configure_raid() {
     # Обеспечиваем автоматическое монтирование через /etc/fstab
     UUID=$(blkid -s UUID -o value $RAID_DEVICE)
     echo "UUID=$UUID $MOUNT_DIR ext4 defaults 0 0" >> /etc/fstab
-
-    echo "RAID массив смонтирован в $MOUNT_DIR."
 }
 
 # Функция настройки NFS
 configure_nfs() {
-    echo "Настройка NFS"
-
     # Запрос необходимых переменных
-    read -p "Введите директорию для NFS (например, /obmen/nfs): " NFS_DIR
-    EXPORTS_FILE="/etc/exports"
+    read -p "Введите директорию для NFS (по умолчанию: $NFS_DIR): " input_nfs_dir
+
+    NFS_DIR=${input_nfs_dir:-$NFS_DIR}
 
     # Установка необходимых пакетов
     dnf install -y nfs-utils
@@ -443,7 +478,36 @@ configure_nfs() {
 
     # Проверяем статус сервиса
     systemctl status nfs-server
-    echo "NFS настроен для $NFS_DIR."
+}
+
+# Функция настройки клиента NFS
+configure_nfs_client() {
+    # Запрос необходимых переменных
+    read -p "Введите IP адрес NFS сервера (по умолчанию: $NFS_SERVER): " input_nfs_server
+    read -p "Введите экспортированную папку (по умолчанию: $NFS_EXPORT): " input_nfs_export
+    read -p "Введите точку монтирования (по умолчанию: $MOUNT_DIR): " input_mount_dir
+
+    NFS_SERVER=${input_nfs_server:-$NFS_SERVER}
+    NFS_EXPORT=${input_nfs_export:-$NFS_EXPORT}
+    MOUNT_DIR=${input_mount_dir:-$MOUNT_DIR}
+
+    # Устанавливаем необходимые пакеты
+    dnf install -y nfs-utils
+    # Создаем точку монтирования
+    mkdir -p $MOUNT_DIR
+    # Добавляем запись в /etc/fstab для автомонтирования
+    if ! grep -q "$NFS_SERVER:$NFS_EXPORT" /etc/fstab; then
+        echo "$NFS_SERVER:$NFS_EXPORT $MOUNT_DIR nfs defaults 0 0" >> /etc/fstab
+    fi
+    # Монтируем экспортированную папку
+    mount -a
+    # Проверяем статус монтирования
+    if mountpoint -q $MOUNT_DIR; then
+        echo "NFS успешно смонтирован в $MOUNT_DIR."
+    else
+        echo "Ошибка монтирования NFS. Проверьте настройки."
+        exit 1
+    fi
 }
 
 # Функция для проверки IP и пинга
@@ -467,7 +531,7 @@ check_ip_and_ping() {
 
 # Функция настройки Chrony
 configure_chrony() {
-    echo "Установка и настройка Chrony..."
+    echo "Настройка Chrony..."
 
     # Установка Chrony
     dnf install -y chrony
@@ -482,17 +546,22 @@ configure_chrony() {
     sed -i 's/^server ntp4.vniiftri.ru iburst/#server ntp4.vniiftri.ru iburst/' $CHRONY_CONF
 
     # Запрос локального stratum
-    read -p "Введите значение local stratum (например, 6): " local_stratum
-
+    read -p "Введите значение local stratum (например, 6): " input_local_stratum
+    local_stratum=${input_local_stratum:-$local_stratum}
     # Добавление локального сервера
     echo "server 127.0.0.1 iburst prefer" >> $CHRONY_CONF
     echo "local stratum $local_stratum" >> $CHRONY_CONF
 
     # Запрос сетевых переменных
-    read -p "Введите сеть для разрешения (например, $NETWORK_Left): " NETWORK_Left
-    read -p "Введите сеть офиса (например, $NETWORK_Right): " NETWORK_Right
-    read -p "Введите сеть туннеля (например, $NETWORK_TUNNEL): " NETWORK_TUNNEL
+    read -p "Введите сеть для разрешения (например, $NETWORK_Left): " input_NETWORK_Left
+    read -p "Введите сеть офиса (например, $NETWORK_Right): " input_NETWORK_Right
+    read -p "Введите сеть туннеля (например, $NETWORK_TUNNEL): " input_NETWORK_TUNNEL
     
+    # Использование значений по умолчанию, если пользователь ничего не ввел
+    NETWORK_Left=${input_NETWORK_Left:-$NETWORK_Left}
+    NETWORK_Right=${input_NETWORK_Right:-$NETWORK_Right}
+    NETWORK_TUNNEL=${input_NETWORK_TUNNEL:-$NETWORK_TUNNEL}
+
     # Разрешение доступа к NTP
     echo "allow $NETWORK_Left" >> $CHRONY_CONF
     echo "allow $NETWORK_Right" >> $CHRONY_CONF
@@ -503,6 +572,24 @@ configure_chrony() {
     systemctl enable --now chronyd
 
     echo "Chrony успешно настроен."
+}
+
+# Функция настройки клиента Chrony
+configure_chrony_client() {
+    # Установка необходимых пакетов
+    dnf install -y chrony
+    # Запрос IP-адреса NTP сервера
+    read -p "Введите IP-адрес NTP сервера (по умолчанию: $CHRONY_SERVER): " input_CHRONY_SERVER
+    CHRONY_SERVER=${input_CHRONY_SERVER:-$CHRONY_SERVER}
+
+    # Настройка конфигурации Chrony
+    sed -i "s/server ntp1.vniiftri.ru iburst/server $CHRONY_SERVER iburst/" /etc/chrony.conf
+    sed -i 's/server ntp2.vniiftri.ru iburst/#server ntp2.vniiftri.ru iburst/' /etc/chrony.conf
+    sed -i 's/server ntp3.vniiftri.ru iburst/#server ntp3.vniiftri.ru iburst/' /etc/chrony.conf
+    sed -i 's/server ntp4.vniiftri.ru iburst/#server ntp4.vniiftri.ru iburst/' /etc/chrony.conf
+    # Включение и запуск Chrony
+    systemctl enable --now chronyd
+    systemctl restart chronyd
 }
 
 # Функция создания backup скрипта
@@ -831,10 +918,136 @@ EOL
     fi
 }
 
+# Функция установки и настройки сервера IPA
+install_ipa_server() {
+    echo "Установка и настройка сервера IPA..."
+
+    # Запрос имени хоста
+    read -p "Введите имя хоста (по умолчанию: hq-srv.hq.work): " new_hostname
+    HOSTNAME=${new_hostname:-hq-srv.hq.work}
+    hostnamectl set-hostname $HOSTNAME
+
+    # Установка необходимых пакетов
+    echo "Установка необходимых пакетов..."
+    dnf install -y bind bind-dyndb-ldap ipa-server ipa-server-dns ipa-server-trust-ad
+
+    # Установка сервера IPA
+    echo "Установка сервера IPA..."
+    echo "Do you want to configure integrated DNS (BIND)? [no]: пишем yes"
+    echo "На вопрос на какие сервера необходимо перенаправлять внешние DNS запросы - пишем нет"
+    echo "Do you want to configure DNS forwarders? [yes]: пишем  no"
+    echo "Do you want to search for nissing reverse zones? (yes): пишем no"
+    echo "Do you want to configure chrony with NTP server or pool address? [no]: пишем no"
+    echo "На вопрос создание обратной зоны для службы имен - пишем no"
+    echo "Continue to configure the system with these values? [no]: пишем yes"
+    ipa-server-install --mkhomedir
+
+    # Пауза для продолжения
+    read -p "!!!reboot!!! Нажмите Enter для продолжения..."
+
+    echo "Установка и настройка сервера IPA завершены."
+}
+
+# Функция установки PostgreSQL и pgAdmin4
+install_postgresql_pgadmin() {
+    echo "Установка PostgreSQL и pgAdmin4..."
+
+    # Установка необходимых пакетов
+    dnf install -y postgresql15-server pgadmin4 pgadmin4-qt pgadmin4-langpack-ru httpd python3-mod_wsgi pgadmin4-httpd
+
+    # Инициализация базы данных PostgreSQL
+    postgresql-15-setup initdb
+
+    # Запуск и включение службы PostgreSQL
+    systemctl enable postgresql-15.service --now
+
+    # Настройка прав доступа для pgAdmin4
+    mkdir -p /var/log/pgadmin4/
+    setsebool -P httpd_can_network_connect 1
+    setsebool -P httpd_can_network_connect_db 1
+    semanage fcontext -a -t httpd_sys_rw_content_t "/var/lib/pgadmin4(/.*)?"
+    semanage fcontext -a -t httpd_sys_rw_content_t "/var/log/pgadmin4(/.*)?"
+    restorecon -R /var/lib/pgadmin4/
+    restorecon -R /var/log/pgadmin4/
+    systemctl enable httpd --now
+
+    # Настройка конфигурации pgAdmin4
+    cat << EOF >> /usr/lib/pgadmin4/config_local.py 
+import os
+from config import *
+HELP_PATH = '/usr/share/doc/pgadmin4/html/'
+DATA_DIR = os.path.realpath(os.path.expanduser(u'/var/lib/pgadmin4'))
+LOG_FILE = os.path.join(DATA_DIR, 'pgadmin4.log')
+SQLITE_PATH = os.path.join(DATA_DIR, 'pgadmin4.db')
+SESSION_DB_PATH = os.path.join(DATA_DIR, 'sessions')
+STORAGE_DIR = os.path.join(DATA_DIR, 'storage')
+AZURE_CREDENTIAL_CACHE_DIR = os.path.join(DATA_DIR, 'azurecredentialcache')
+KERBEROS_CCACHE_DIR = os.path.join(DATA_DIR, 'krbccache')
+TEST_SQLITE_PATH = os.path.join(DATA_DIR, 'test_pgadmin4.db')
+EOF
+
+    # Запрос имени пользователя и пароля для pgAdmin4
+    while true; do
+        read -p "Введите email администратора pgAdmin4 (по умолчанию: $EMAIL): " input_admin_email
+        if [[ "$input_admin_email" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+            ADMIN_EMAIL=${input_admin_email:-$EMAIL}
+            break
+        else
+            echo "Некорректный адрес электронной почты. Пожалуйста, попробуйте снова."
+        fi
+    done
+
+    while true; do
+        read -p "Введите пароль администратора pgAdmin4 (по умолчанию: $ADMIN_PASSWORD): " input_admin_password
+        if [[ -n "$input_admin_password" ]]; then
+            ADMIN_PASSWORD=${input_admin_password:-$ADMIN_PASSWORD}
+            break
+        else
+            echo "Пароль не может быть пустым. Пожалуйста, попробуйте снова."
+        fi
+    done
+
+    python /usr/lib/pgadmin4/setup.py <<EOF
+$ADMIN_EMAIL
+$ADMIN_PASSWORD
+EOF
+
+    # Настройка прав доступа
+    chown -R apache:apache /var/lib/pgadmin4 /var/log/pgadmin4
+    systemctl restart httpd
+
+    # Настройка PostgreSQL
+    echo "Настройка PostgreSQL..."
+    sed -i '/^#listen_addresses = 'localhost'/c\listen_addresses = '*'' /var/lib/pgsql/15/data/postgresql.conf
+    sed -i '1 a host all all 0.0.0.0/0 md5' /var/lib/pgsql/15/data/pg_hba.conf
+
+    # Запрос пароля для пользователя postgres
+    while true; do
+        read -p "Введите новый пароль для пользователя postgres (по умолчанию: $POSTGRES_PASSWORD): " input_postgres_password
+        POSTGRES_PASSWORD=${input_postgres_password:-$POSTGRES_PASSWORD}
+        if [[ -n "$POSTGRES_PASSWORD" ]]; then
+            break
+        else
+            echo "Пароль не может быть пустым. Пожалуйста, попробуйте снова."
+        fi
+    done
+
+    su - postgres <<EOF
+psql
+ALTER USER postgres WITH ENCRYPTED PASSWORD '$POSTGRES_PASSWORD';
+EOF
+
+    # Перезапуск службы PostgreSQL
+    systemctl restart postgresql-15.service
+
+    echo "Установка PostgreSQL и pgAdmin4 завершена."
+    echo "pgAdmin4 доступен по адресу: http://<IP-адрес-сервера>/pgadmin4"
+}
+
 # Основной цикл меню
 while true; do
     show_menu
-    read -p "Выберите пункт меню (1-21): " choice
+    read -p "Выберите пункт меню (1-26): " choice
     case $choice in
         1) configure_hostname ;;
         2) configure_network ;;
@@ -846,17 +1059,22 @@ while true; do
         8) configure_user ;;
         9) configure_ssh ;;
         10) configure_cups ;;
-        11) configure_raid ;;
+        11) configure_cups_client ;;
         12) configure_nfs ;;
-        13) check_ip_and_ping ;;
+        13) configure_nfs_client ;;
         14) configure_chrony ;;
-        15) create_backup_script ;;
-        16) install_webmin ;;
-        17) install_adminer ;;
-        18) install_wordpress ;;
-        19) install_lms_apache ;;
-        20) install_mediawiki ;;
-        21) echo "Выход из программы..."; exit 0 ;;
+        15) configure_chrony_client ;;
+        16) install_postgresql_pgadmin ;;
+        17) create_backup_script ;;
+        18) install_webmin ;;
+        19) install_adminer ;;
+        20) install_wordpress ;;
+        21) install_lms_apache ;;
+        22) install_mediawiki ;;
+        23) install_ipa_server ;;
+        24) configure_raid1 ;;
+        25) check_ip_and_ping ;;
+        26) echo "Выход из программы..."; exit 0 ;;
         *) echo "Неверный выбор. Нажмите Enter для продолжения..."; read ;;
     esac
-done 
+done
