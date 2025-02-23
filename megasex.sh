@@ -30,8 +30,9 @@ show_menu() {
     echo "22. Установить MediaWiki"
     echo "23. Установить сервер IPA"
     echo "24. Настроить RAID1"
-    echo "25. Проверка IP и пинга ya.ru"
-    echo "26. Выход"
+    echo "25. Проверка IP и пинга"
+    echo "26. Установить обратный прокси-сервер Nginx"
+    echo "27. Выход"
     echo "============================================"
 }
 
@@ -86,7 +87,7 @@ SITE_TITLE="C1-21 - Pavel"
 SITE_URL="http://192.168.220.5"
 #CHRONY
 local_stratum=6
-#RAID
+#RAID1
 DISK1="/dev/sdb"
 DISK2="/dev/sdc"
 RAID_DEVICE="/dev/md0"
@@ -108,10 +109,17 @@ CHRONY_SERVER="172.16.220.1"
 EMAIL="pasha@gmail.com"
 ADMIN_PASSWORD="QWEasd11"
 POSTGRES_PASSWORD="QWEasd11"
+#MediaWiki
+MEDIAPORT="8081"
+MEDIADB_NAME="db"
+MEDIA="mediawiki"
+MEDIADB_USER="wiki"
+MEDIADB_PASS="P@ssw0rd"
+#PROXY NGINX
+PROXYPORT="3000"
 
 # Функция настройки имени хоста
 configure_hostname() {
-    echo "Текущее имя хоста: $HOSTNAME"
     read -p "Введите новое имя хоста (по умолчанию: $HOSTNAME): " new_hostname
     HOSTNAME=${new_hostname:-$HOSTNAME}
     hostnamectl set-hostname $HOSTNAME
@@ -152,6 +160,8 @@ configure_timezone() {
 
 # Функция настройки nftables
 configure_nftables() {
+    # Получение имени первого интерфейса в системе
+    INTERFACE_1=$(ip -o link show | awk -F': ' '{print $2}' | grep -v 'lo' | head -n 1)
     read -p "Установить и настроить nftables? (y/n): " choice
     case "$choice" in 
         y|Y ) 
@@ -286,6 +296,7 @@ configure_ssh() {
     echo "Authorized access only" > $BANNER_PATH
 
     # Настройка порта SSH
+    sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config
     semanage port -a -t ssh_port_t -p tcp $PORT_SSH
     setenforce 0
     sed -i "20 a Port $PORT_SSH" /etc/ssh/sshd_config
@@ -294,7 +305,6 @@ configure_ssh() {
     sed -i "23 a MaxAuthTries $POPITKA" /etc/ssh/sshd_config
     sed -i "24 a LoginGraceTime $TIME" /etc/ssh/sshd_config
     sed -i "25 a Banner $BANNER_PATH" /etc/ssh/sshd_config
-
     # Перезапуск службы SSH для применения изменений
     systemctl restart sshd
 }
@@ -304,13 +314,12 @@ configure_frr() {
     echo "Настройка FRR с OSPF"
     
     # Запрос необходимых переменных
-    read -p "Введите имя хоста для FRR (по умолчанию: $HOSTNAME): " new_hostname
     read -p "Введите имя интерфейса для OSPF (по умолчанию: $TUNNEL_NAME): " new_tunnel_name
     read -p "Введите пароль для OSPF аутентификации: " ospf_password
     read -p "Введите сеть для OSPF (по умолчанию: $NETWORK_Left): " new_network_left
     read -p "Введите вторую сеть для OSPF (по умолчанию: $NETWORK_2): " new_network_2
 
-    HOSTNAME=${new_hostname:-$HOSTNAME}
+    HOSTNAME=$(hostname)
     TUNNEL_NAME=${new_tunnel_name:-$TUNNEL_NAME}
     NETWORK_Left=${new_network_left:-$NETWORK_Left}
     NETWORK_2=${new_network_2:-$NETWORK_2}
@@ -868,6 +877,18 @@ install_mediawiki() {
     echo "Установка Docker Compose..."
     dnf install -y docker-compose
 
+    # Запрос необходимых переменных с использованием значений по умолчанию
+    read -p "Введите порт для MediaWiki (по умолчанию: $MEDIAPORT): " input_media_port
+    read -p "Введите имя контейнера (по умолчанию: $MEDIADB_NAME): " input_media_db_name
+    read -p "Введите имя базы данных (по умолчанию: $MEDIA): " input_media
+    read -p "Введите имя пользователя базы данных (по умолчанию: $MEDIADB_USER): " input_media_db_user
+    read -p "Введите пароль для пользователя базы данных (по умолчанию: $MEDIADB_PASS): " input_media_db_pass
+
+    MEDIAPORT=${input_media_port:-$MEDIAPORT}
+    MEDIADB_NAME=${input_media_db_name:-$MEDIADB_NAME}
+    MEDIA=${input_media:-$MEDIA}
+    MEDIADB_USER=${input_media_db_user:-$MEDIADB_USER}
+    MEDIADB_PASS=${input_media_db_pass:-$MEDIADB_PASS}
     # Создание файла docker-compose.yml
     echo "Создание файла docker-compose.yml..."
     cat <<EOL > ~/wiki.yml
@@ -877,19 +898,19 @@ services:
     image: mediawiki
     restart: always
     ports:
-      - 8081:80
+      - $MEDIAPORT:80
     links:
       - database
     volumes:
       - images:/var/www/html/images
       # - ./LocalSettings.php:/var/www/html/LocalSettings.php
   database:
-    container_name: db
+    container_name: $MEDIADB_NAME
     image: mysql
     environment:
-      MYSQL_DATABASE: mediawiki
-      MYSQL_USER: wiki
-      MYSQL_PASSWORD: P@ssw0rd
+      MYSQL_DATABASE: $MEDIA
+      MYSQL_USER: $MEDIADB_USER
+      MYSQL_PASSWORD: $MEDIADB_PASS
       MYSQL_RANDOM_ROOT_PASSWORD: 'yes'
     volumes:
       - dbvolume:/var/lib/mysql
@@ -909,9 +930,9 @@ EOL
     docker-compose -f ~/wiki.yml up -d
 
     # Проверка доступности MediaWiki
-    echo "Проверка доступности MediaWiki на порту 8081..."
-    if curl -s --head http://localhost:8081 | grep "200 OK" > /dev/null; then
-        echo "MediaWiki доступен по адресу http://localhost:8081"
+    echo "Проверка доступности MediaWiki на порту $MEDIAPORT..."
+    if curl -s --head http://localhost:$MEDIAPORT | grep "200 OK" > /dev/null; then
+        echo "MediaWiki доступен по адресу http://localhost:$MEDIAPORT"
     else
         echo "Ошибка: MediaWiki недоступен."
         exit 1
@@ -1044,10 +1065,41 @@ EOF
     echo "pgAdmin4 доступен по адресу: http://<IP-адрес-сервера>/pgadmin4"
 }
 
+# Функция установки и настройки обратного прокси-сервера Nginx
+install_nginx_reverse_proxy() {
+    echo "Установка и настройка обратного прокси-сервера Nginx..."
+    # Установка Nginx
+    read -p "Введите порт на который пререправлять (по умолчанию: $PROXYPORT): " input_proxyport
+    PROXYPORT=${input_proxyport:-$PROXYPORT}
+    dnf install -y nginx
+    setenforce 0
+    setsebool -P httpd_can_network_connect 1
+    # Получение имени хоста
+    # Получение IP-адреса первого интерфейса
+    IP1=$(ip -o -4 addr show $INTERFACE_1 | awk '{print $4}' | cut -d'/' -f1)
+cat << EOF > /etc/nginx/conf.d/proxy.conf
+server {
+    listen 80;
+    server_name $IP1;
+
+    location / {
+        proxy_pass http://127.0.0.1:$PROXYPORT;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF
+    # Перезапуск Nginx
+    systemctl restart nginx
+    systemctl enable --now nginx
+}
+
 # Основной цикл меню
 while true; do
     show_menu
-    read -p "Выберите пункт меню (1-26): " choice
+    read -p "Выберите пункт меню (1-27): " choice
     case $choice in
         1) configure_hostname ;;
         2) configure_network ;;
@@ -1074,7 +1126,8 @@ while true; do
         23) install_ipa_server ;;
         24) configure_raid1 ;;
         25) check_ip_and_ping ;;
-        26) echo "Выход из программы..."; exit 0 ;;
+        26) install_nginx_reverse_proxy ;;
+        27) echo "Выход из программы..."; exit 0 ;;
         *) echo "Неверный выбор. Нажмите Enter для продолжения..."; read ;;
     esac
 done
