@@ -29,10 +29,13 @@ show_menu() {
     echo "21. Установить LMS Apache"
     echo "22. Установить MediaWiki"
     echo "23. Установить сервер IPA"
-    echo "24. Настроить RAID1"
-    echo "25. Проверка IP и пинга"
-    echo "26. Установить обратный прокси-сервер Nginx"
-    echo "27. Выход"
+    echo "24. Установить обратный прокси-сервер Nginx"
+    echo "25. Установить rsyslog"
+    echo "26. Настроить клиента rsyslog"
+    echo "27. Установить и настроить BIND"
+    echo "28. Настроить RAID1"
+    echo "29. Проверка IP и пинга"
+    echo "30. Выход"
     echo "============================================"
 }
 
@@ -117,6 +120,20 @@ MEDIADB_USER="wiki"
 MEDIADB_PASS="P@ssw0rd"
 #PROXY NGINX
 PROXYPORT="3000"
+# rsyslog
+DB_ROOT_USERRSYS="root"
+DB_ROOT_PASSWORDRSYS="QWEasd11"
+DB_NAMERSYS="Syslog"
+DB_USERRSYS="rsyslog"
+DB_PASSWORDRSYS="QWEasd11"
+# клиент rsyslog
+RSYSLOG_SERVER=192.168.1.1
+#BIND
+DOMAIN_NAME="au-team.irpo"
+DNS_IP="172.16.1.1"
+ALLOWED_NETWORK="any"
+FORWARDER="8.8.8.8"
+ADMIN_EMAIL="admin.${DOMAIN_NAME}."
 
 # Функция настройки имени хоста
 configure_hostname() {
@@ -1011,7 +1028,7 @@ EOF
     while true; do
         read -p "Введите email администратора pgAdmin4 (по умолчанию: $EMAIL): " input_admin_email
         if [[ "$input_admin_email" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
-            ADMIN_EMAIL=${input_admin_email:-$EMAIL}
+            EMAIL=${input_admin_email:-$EMAIL}
             break
         else
             echo "Некорректный адрес электронной почты. Пожалуйста, попробуйте снова."
@@ -1029,7 +1046,7 @@ EOF
     done
 
     python /usr/lib/pgadmin4/setup.py <<EOF
-$ADMIN_EMAIL
+$EMAIL
 $ADMIN_PASSWORD
 EOF
 
@@ -1096,10 +1113,250 @@ EOF
     systemctl enable --now nginx
 }
 
+# Функция установки и настройки rsyslog
+install_rsyslog() {
+    # Установка необходимых пакетов
+    dnf install -y mariadb-server rsyslog-mysql php php-mysqlnd httpd mysql php-xml php-mbstring
+    setsebool -P httpd_can_network_connect 1
+    setsebool -P httpd_can_network_connect_db 1
+    sed -i "s/SELINUX=enforcing/SELINUX=permissive/" /etc/selinux/config
+    setenforce 0
+    systemctl enable httpd --now
+    systemctl enable mariadb --now
+
+    # Настройка iptables
+    iptables -A INPUT -p tcp --dport 514 -j ACCEPT
+    iptables -A INPUT -p udp --dport 514 -j ACCEPT
+    semanage port -m -t syslogd_port_t -p tcp 514
+    semanage port -m -t syslogd_port_t -p udp 514
+
+    # Установка пароля для root
+    mariadb-admin -u $DB_ROOT_USERRSYS password $DB_ROOT_PASSWORDRSYS
+
+    # Создание базы данных и пользователя
+    mysql -u $DB_ROOT_USERRSYS -p"$DB_ROOT_PASSWORDRSYS" <<EOF
+CREATE DATABASE IF NOT EXISTS $DB_NAMERSYS;
+GRANT ALL ON $DB_NAMERSYS.* TO '$DB_USERRSYS'@'localhost' IDENTIFIED BY '$DB_PASSWORDRSYS';
+FLUSH PRIVILEGES;
+EOF
+
+    # Настройка rsyslog
+    sed -i '39 a module(load="ommysql")' /etc/rsyslog.conf
+    sed -i "41 a *.* :ommysql:localhost,$DB_NAMERSYS,$DB_USERRSYS,$DB_PASSWORDRSYS" /etc/rsyslog.conf
+    systemctl restart rsyslog.service
+
+    # Включаем прием сообщений от клиентов
+    sed -i 's/#module(load="imudp")/module(load="imudp")/' /etc/rsyslog.conf
+    sed -i 's/#input(type="imudp" port="514")/input(type="imudp" port="514")/' /etc/rsyslog.conf
+    sed -i 's/#module(load="imtcp")/module(load="imtcp")/' /etc/rsyslog.conf
+    sed -i 's/#input(type="imtcp" port="514")/input(type="imtcp" port="514")/' /etc/rsyslog.conf
+    sed -i '/input(type="imtcp" port="514")/ a \$template RemoteLogs,"/var/log/rsyslog/%HOSTNAME%/%PROGRAMNAME%.log"' /etc/rsyslog.conf
+    sed -i '/input(type="imtcp" port="514")/ a *.* ?RemoteLogs' /etc/rsyslog.conf
+    sed -i '/input(type="imtcp" port="514")/ a & ~' /etc/rsyslog.conf
+    systemctl restart rsyslog.service
+
+# Создаем директорию для хранения логов
+cat << EOF >> /etc/rsyslog.d/mysql.conf
+module(load="ommysql")
+*.err action(type="ommysql" server="localhost" db="$DB_NAMERSYS" uid="$DB_USERRSYS" pwd="$DB_PASSWORDRSYS") 
+*.crit action(type="ommysql" server="localhost" db="$DB_NAMERSYS" uid="$DB_USERRSYS" pwd="$DB_PASSWORDRSYS")
+EOF
+rsyslogd -N1
+echo -e "\n# Хранение логов от клиентов" >> /etc/rsyslog.conf
+echo "$template RemoteLogs,\"/var/log/rsyslog/%HOSTNAME%/%PROGRAMNAME%.log" >> /etc/rsyslog.conf
+echo "*.* ?RemoteLogs" >> /etc/rsyslog.conf
+echo "\$StopLogging" >> /etc/rsyslog.conf
+systemctl restart rsyslog.service
+
+    echo "Установка и настройка rsyslog завершены."
+}
+
+# Функция настройки клиента rsyslog
+configure_rsyslog_client() {
+    echo "Настройка клиента rsyslog..."
+
+    # Запрос IP-адреса сервера rsyslog
+    read -p "Введите IP-адрес сервера rsyslog (по умолчанию: $RSYSLOG_SERVER): " input_rsyslog_server
+    RSYSLOG_SERVER=${input_rsyslog_server:-$RSYSLOG_SERVER}
+
+    # Настройка конфигурации rsyslog
+    echo "Настройка конфигурации rsyslog для отправки логов на сервер $RSYSLOG_SERVER..."
+    sed -i "s/#module(load=\"imudp\")/module(load=\"imudp\")/" /etc/rsyslog.conf
+    sed -i "s/#input(type=\"imudp\" port=\"514\")/input(type=\"imudp\" port=\"514\")/" /etc/rsyslog.conf
+    sed -i "s/#module(load=\"imtcp\")/module(load=\"imtcp\")/" /etc/rsyslog.conf
+    sed -i "s/#input(type=\"imtcp\" port=\"514\")/input(type=\"imtcp\" port=\"514\")/" /etc/rsyslog.conf
+    echo "*.* @$RSYSLOG_SERVER:514" >> /etc/rsyslog.conf
+
+    # Перезапуск службы rsyslog
+    systemctl restart rsyslog.service
+
+    echo "Клиент rsyslog настроен для отправки логов на сервер $RSYSLOG_SERVER."
+}
+
+# Функция установки и настройки BIND (DNS-сервер)
+install_bind() {
+    # Переменные конфигурации с значениями по умолчанию
+    read -p "Введите имя домена (по умолчанию: $DOMAIN_NAME): " input_domain_name
+    DOMAIN_NAME=${input_domain_name:-$DOMAIN_NAME}
+    read -p "Введите внутренний IP-адрес DNS-сервера (по умолчанию: $DNS_IP): " input_dns_ip
+    DNS_IP=${input_dns_ip:-$DNS_IP}
+    read -p "Введите сеть для разрешения запросов (по умолчанию: $ALLOWED_NETWORK): " input_allowed_network
+    ALLOWED_NETWORK=${input_allowed_network:-$ALLOWED_NETWORK}
+    read -p "Введите адрес DNS-сервера пересылки (по умолчанию: $FORWARDER): " input_forwarder
+    FORWARDER=${input_forwarder:-$FORWARDER}
+    read -p "Введите email администратора (по умолчанию: $ADMIN_EMAIL): " input_admin_email
+    ADMIN_EMAIL=${input_admin_email:-$ADMIN_EMAIL}
+
+dnf install -y bind bind-utils
+# Создание основного конфигурационного файла
+cat > /etc/named.conf << EOF
+options {
+    listen-on port 53 { $DNS_IP; };
+    listen-on-v6 port 53 { ::1; };
+    directory     "/var/named";
+    dump-file     "/var/named/data/cache_dump.db";
+    statistics-file "/var/named/data/named_stats.txt";
+    memstatistics-file "/var/named/data/named_mem_stats.txt";
+    secroots-file "/var/named/data/named.secroots";
+    recursing-file "/var/named/data/named.recursing";
+    allow-query     { any; };
+
+    recursion yes;
+    forwarders { ${FORWARDER}; };
+
+    dnssec-validation no;
+
+    managed-keys-directory "/var/named/dynamic";
+
+    pid-file "/run/named/named.pid";
+    session-keyfile "/run/named/session.key";
+};
+
+logging {
+    channel default_debug {
+        file "data/named.run";
+        severity dynamic;
+    };
+};
+
+zone "." IN {
+    type hint;
+    file "named.ca";
+};
+
+zone "${DOMAIN_NAME}" IN {
+    type master;
+    file "forward.${DOMAIN_NAME}";
+    allow-update { none; };
+};
+
+zone "0.0.127.in-addr.arpa" IN {
+    type master;
+    file "named.loopback";
+    allow-update { none; };
+};
+EOF
+
+# Извлечение первых трех октетов IP для обратной зоны
+IP_OCTETS=(${DNS_IP//./ })
+REVERSE_ZONE="${IP_OCTETS[2]}.${IP_OCTETS[1]}.${IP_OCTETS[0]}.in-addr.arpa"
+LAST_OCTET="${IP_OCTETS[3]}"
+
+# Добавление обратной зоны
+cat >> /etc/named.conf << EOF
+zone "${REVERSE_ZONE}" IN {
+    type master;
+    file "reverse.${DOMAIN_NAME}";
+    allow-update { none; };
+};
+EOF
+
+echo "Создание файла прямой зоны..."
+# Создание файла прямой зоны
+cat > /var/named/forward.${DOMAIN_NAME} << EOF
+\$TTL 86400
+@   IN SOA  ${DOMAIN_NAME}. root.${DOMAIN_NAME} (
+        $(date +%Y%m%d%H)  ; Serial
+        3600        ; Refresh
+        1800        ; Retry
+        604800      ; Expire
+        86400       ; Minimum TTL
+)
+
+@       IN  NS      hq-rtr.${DOMAIN_NAME}.
+@       IN  A       ${DNS_IP}
+
+; Записи A и CNAME из таблицы
+hq-rtr          IN  A       ${DNS_IP}
+hq-rtr          IN  PTR     ${DNS_IP}
+br-rtr          IN  A       ${DNS_IP}
+hq-srv          IN  A       ${DNS_IP}
+hq-srv          IN  PTR     ${DNS_IP}
+hq-cli          IN  A       ${DNS_IP}
+hq-cli          IN  PTR     ${DNS_IP}
+br-srv          IN  A       ${DNS_IP}
+moodle          IN  CNAME   hq-rtr
+wiki            IN  CNAME   hq-rtr
+EOF
+
+# Установка правильных разрешений
+chown root:named /var/named/forward.${DOMAIN_NAME}
+chmod 0640 /var/named/forward.${DOMAIN_NAME}
+
+echo "Создание файла обратной зоны..."
+# Создание файла обратной зоны
+cat > /var/named/reverse.${DOMAIN_NAME} << EOF
+\$TTL 86400
+@   IN SOA  ${DOMAIN_NAME}. root.${DOMAIN_NAME} (
+        $(date +%Y%m%d%H)  ; Serial
+        3600        ; Refresh
+        1800        ; Retry
+        604800      ; Expire
+        86400       ; Minimum TTL
+)
+
+@       IN  NS      hq-rtr.${DOMAIN_NAME}.
+
+; Обратные записи PTR
+${LAST_OCTET}    IN  PTR     hq-rtr.${DOMAIN_NAME}.
+${LAST_OCTET}    IN  PTR     hq-srv.${DOMAIN_NAME}.
+${LAST_OCTET}    IN  PTR     hq-cli.${DOMAIN_NAME}.
+EOF
+
+# Установка правильных разрешений
+chown root:named /var/named/reverse.${DOMAIN_NAME}
+chmod 640 /var/named/reverse.${DOMAIN_NAME}
+
+echo "Настройка брандмауэра..."
+# Настройка брандмауэра
+if systemctl is-active --quiet firewalld; then
+    firewall-cmd --permanent --add-service=dns
+    firewall-cmd --reload
+fi
+# Запуск и включение службы
+systemctl enable named
+systemctl start named
+
+echo "Проверка конфигурации..."
+# Проверка конфигурации
+named-checkconf
+if [ $? -eq 0 ]; then
+    echo "Конфигурация named верна."
+    systemctl restart named
+    echo "DNS-сервер успешно настроен и запущен."
+    echo "Тестирование DNS-сервера можно выполнить командами:"
+    echo "dig @localhost hq-rtr.${DOMAIN_NAME}"
+    echo "dig @localhost -x ${DNS_IP}"
+else
+    echo "Ошибка в конфигурации named."
+fi
+read -p "Нажмите Enter для продолжения..."
+}
+
 # Основной цикл меню
 while true; do
     show_menu
-    read -p "Выберите пункт меню (1-27): " choice
+    read -p "Выберите пункт меню (1-30): " choice
     case $choice in
         1) configure_hostname ;;
         2) configure_network ;;
@@ -1124,10 +1381,13 @@ while true; do
         21) install_lms_apache ;;
         22) install_mediawiki ;;
         23) install_ipa_server ;;
-        24) configure_raid1 ;;
-        25) check_ip_and_ping ;;
-        26) install_nginx_reverse_proxy ;;
-        27) echo "Выход из программы..."; exit 0 ;;
+        24) install_nginx_reverse_proxy ;;
+        25) install_rsyslog ;;
+        26) configure_rsyslog_client ;;
+        27) install_bind ;;
+        28) configure_raid1 ;;
+        29) check_ip_and_ping ;;
+        30) echo "Выход из программы..."; exit 0 ;;
         *) echo "Неверный выбор. Нажмите Enter для продолжения..."; read ;;
     esac
 done
