@@ -35,7 +35,9 @@ show_menu() {
     echo "27. Установить и настроить BIND"
     echo "28. Настроить RAID1"
     echo "29. Проверка IP и пинга"
-    echo "30. Выход"
+    echo "30. Настроить RAID5"
+    echo "31. Настроить Ansible"
+    echo "32. Выход"
     echo "============================================"
 }
 
@@ -90,12 +92,14 @@ SITE_TITLE="C1-21 - Pavel"
 SITE_URL="http://192.168.220.5"
 #CHRONY
 local_stratum=6
-#RAID1
+#RAID1 и RAID5
 DISK1="/dev/sdb"
 DISK2="/dev/sdc"
+DISK3="/dev/sdd"
 RAID_DEVICE="/dev/md0"
 MDADM_CONFIG="/etc/mdadm.conf"
 MOUNT_DIR="/obmen"
+MOUNT_DIR5="/raid5"
 #NFS
 NFS_DIR="/obmen/nfs"
 EXPORTS_FILE="/etc/exports"
@@ -134,6 +138,15 @@ DNS_IP="172.16.1.1"
 ALLOWED_NETWORK="any"
 FORWARDER="8.8.8.8"
 ADMIN_EMAIL="admin.${DOMAIN_NAME}."
+# Переменные для Ansible
+ANSIBLE_HQ_SRV_IP="192.168.100.2"
+ANSIBLE_HQ_CLI_IP="192.168.100.3"
+ANSIBLE_HQ_RTR_IP="172.16.4.2"
+ANSIBLE_BR_RTR_IP="172.16.5.2"
+ANSIBLE_SSH_PORT=2024
+ANSIBLE_SSH_USER="sshuser"
+ANSIBLE_USER_CLI="user"
+ANSIBLE_USER_RTR="net_admin"
 
 # Функция настройки имени хоста
 configure_hostname() {
@@ -485,25 +498,19 @@ configure_raid1() {
 configure_nfs() {
     # Запрос необходимых переменных
     read -p "Введите директорию для NFS (по умолчанию: $NFS_DIR): " input_nfs_dir
-
     NFS_DIR=${input_nfs_dir:-$NFS_DIR}
-
     # Установка необходимых пакетов
-    dnf install -y nfs-utils
-
+    dnf install -y nfs-utils nfs4-acl-tools
     # Создаем директорию для NFS
     mkdir -p $NFS_DIR
     chmod 777 $NFS_DIR
-
     # Добавляем запись в /etc/exports
     echo "$NFS_DIR *(rw,sync,no_root_squash)" >> $EXPORTS_FILE
-
     # Перезапускаем сервис NFS
     systemctl enable nfs-server
     systemctl restart nfs-server
-
     # Проверяем статус сервиса
-    systemctl status nfs-server
+    exportfs -a
 }
 
 # Функция настройки клиента NFS
@@ -512,7 +519,6 @@ configure_nfs_client() {
     read -p "Введите IP адрес NFS сервера (по умолчанию: $NFS_SERVER): " input_nfs_server
     read -p "Введите экспортированную папку (по умолчанию: $NFS_EXPORT): " input_nfs_export
     read -p "Введите точку монтирования (по умолчанию: $MOUNT_DIR): " input_mount_dir
-
     NFS_SERVER=${input_nfs_server:-$NFS_SERVER}
     NFS_EXPORT=${input_nfs_export:-$NFS_EXPORT}
     MOUNT_DIR=${input_mount_dir:-$MOUNT_DIR}
@@ -1344,10 +1350,90 @@ fi
 read -p "Нажмите Enter для продолжения..."
 }
 
+# Функция настройки RAID 5
+configure_raid5() {
+    read -p "автоматическое монтирование в папку: (по умолчанию: $MOUNT_DIR5): " input_MOUNT_DIR5
+    MOUNT_DIR5=${input_MOUNT_DIR5:-$MOUNT_DIR5}
+    dnf install -y mdadm
+    # Создание RAID 5 массива
+    mdadm --create --verbose $RAID_DEVICE --level=5 --raid-devices=3 $DISK1 $DISK2 $DISK3
+    if [ $? -ne 0 ]; then
+        echo "Ошибка создания RAID массива. Проверьте диски $DISK1, $DISK2 и $DISK3."
+        exit 1
+    fi
+    # Сохраняем конфигурацию массива в mdadm.conf
+    mdadm --detail --scan --verbose >> $MDADM_CONFIG
+    # Создаем файловую систему ext4
+    mkfs.ext4 $RAID_DEVICE
+    # Создаем точку монтирования и монтируем устройство
+    mkdir -p $MOUNT_DIR5
+    mount $RAID_DEVICE $MOUNT_DIR5
+    # Обеспечиваем автоматическое монтирование через /etc/fstab
+    UUID=$(blkid -s UUID -o value $RAID_DEVICE)
+    echo "UUID=$UUID $MOUNT_DIR5 ext4 defaults 0 0" >> /etc/fstab
+}
+
+# Функция настройки Ansible на сервере BR-SRV
+configure_ansible() {
+    # Запрос переменных у пользователя
+    read -p "Введите IP-адрес HQ-SRV (по умолчанию: $ANSIBLE_HQ_SRV_IP): " input_hq_srv_ip
+    ANSIBLE_HQ_SRV_IP=${input_hq_srv_ip:-$ANSIBLE_HQ_SRV_IP}
+    read -p "Введите IP-адрес HQ-CLI (по умолчанию: $ANSIBLE_HQ_CLI_IP): " input_hq_cli_ip
+    ANSIBLE_HQ_CLI_IP=${input_hq_cli_ip:-$ANSIBLE_HQ_CLI_IP}
+    read -p "Введите IP-адрес HQ-RTR (по умолчанию: $ANSIBLE_HQ_RTR_IP): " input_hq_rtr_ip
+    ANSIBLE_HQ_RTR_IP=${input_hq_rtr_ip:-$ANSIBLE_HQ_RTR_IP}
+    read -p "Введите IP-адрес BR-RTR (по умолчанию: $ANSIBLE_BR_RTR_IP): " input_br_rtr_ip
+    ANSIBLE_BR_RTR_IP=${input_br_rtr_ip:-$ANSIBLE_BR_RTR_IP}
+    read -p "Введите порт SSH (по умолчанию: $ANSIBLE_SSH_PORT): " input_ssh_port
+    ANSIBLE_SSH_PORT=${input_ssh_port:-$ANSIBLE_SSH_PORT}
+    read -p "Введите имя пользователя для SSH (по умолчанию: $ANSIBLE_SSH_USER): " input_ssh_user
+    ANSIBLE_SSH_USER=${input_ssh_user:-$ANSIBLE_SSH_USER}
+    read -p "Введите имя пользователя для HQ-CLI (по умолчанию: $ANSIBLE_USER_CLI): " input_user_cli
+    ANSIBLE_USER_CLI=${input_user_cli:-$ANSIBLE_USER_CLI}
+    read -p "Введите имя пользователя для HQ-RTR и BR-RTR (по умолчанию: $ANSIBLE_USER_RTR): " input_user_rtr
+    ANSIBLE_USER_RTR=${input_user_rtr:-$ANSIBLE_USER_RTR}
+    # Установка Ansible
+    dnf install -y ansible
+    # Создание пары SSH-ключей
+    echo "Создание пары SSH-ключей..."
+    ssh-keygen -t rsa
+    # Копирование SSH-ключей на удаленные устройства
+    echo "Копирование SSH-ключей на удаленные устройства..."
+    ssh-copy-id -p $ANSIBLE_SSH_PORT $ANSIBLE_SSH_USER@$ANSIBLE_HQ_SRV_IP  # HQ-SRV
+    ssh-copy-id $ANSIBLE_USER_CLI@$ANSIBLE_HQ_CLI_IP  # HQ-CLI
+    ssh-copy-id $ANSIBLE_USER_RTR@$ANSIBLE_HQ_RTR_IP  # HQ-RTR
+    ssh-copy-id $ANSIBLE_USER_RTR@$ANSIBLE_BR_RTR_IP  # BR-RTR
+    # Создание файла инвентаря
+    echo "Создание файла инвентаря Ansible..."
+    cat > /etc/ansible/demo << EOF
+[HQ]
+$ANSIBLE_HQ_SRV_IP ansible_user=$ANSIBLE_SSH_USER ansible_port=$ANSIBLE_SSH_PORT
+$ANSIBLE_HQ_CLI_IP ansible_user=$ANSIBLE_USER_CLI
+$ANSIBLE_HQ_RTR_IP ansible_user=$ANSIBLE_USER_RTR
+$ANSIBLE_BR_RTR_IP ansible_user=$ANSIBLE_USER_RTR
+
+[BR]
+$ANSIBLE_BR_RTR_IP ansible_user=$ANSIBLE_USER_RTR
+EOF
+    # Настройка конфигурации Ansible
+    echo "Настройка конфигурации Ansible..."
+    mkdir -p /etc/ansible
+    cat > /etc/ansible/ansible.cfg << EOF
+[defaults]
+interpreter_python = auto_silent
+EOF
+
+    # Проверка подключения
+    echo "Проверка подключения к хостам Ansible..."
+    ansible all -i /etc/ansible/demo -m ping
+        # Пауза перед возвратом в меню
+    read -p "Нажмите Enter для продолжения..."
+}
+
 # Основной цикл меню
 while true; do
     show_menu
-    read -p "Выберите пункт меню (1-30): " choice
+    read -p "Выберите пункт меню (1-31): " choice
     case $choice in
         1) configure_hostname ;;
         2) configure_network ;;
@@ -1378,7 +1464,9 @@ while true; do
         27) install_bind ;;
         28) configure_raid1 ;;
         29) check_ip_and_ping ;;
-        30) echo "Выход из программы..."; exit 0 ;;
+        30) configure_raid5 ;;
+        31) configure_ansible ;;
+        32) echo "Выход из программы..."; exit 0 ;;
         *) echo "Неверный выбор. Нажмите Enter для продолжения..."; read ;;
     esac
 done
