@@ -127,7 +127,7 @@ DB_NAMERSYS="Syslog"
 DB_USERRSYS="rsyslog"
 DB_PASSWORDRSYS="QWEasd11"
 # клиент rsyslog
-RSYSLOG_SERVER=192.168.1.1
+RSYSLOG_SERVER="192.168.1.1"
 #BIND
 DOMAIN_NAME="au-team.irpo"
 DNS_IP="172.16.1.1"
@@ -1211,8 +1211,8 @@ dnf install -y bind bind-utils
 # Создание основного конфигурационного файла
 cat > /etc/named.conf << EOF
 options {
-    listen-on port 53 { $DNS_IP; };
-    listen-on-v6 port 53 { ::1; };
+    listen-on port 53 { 127.0.0.1; $DNS_IP; };
+    listen-on-v6 port 53 { none; };
     directory     "/var/named";
     dump-file     "/var/named/data/cache_dump.db";
     statistics-file "/var/named/data/named_stats.txt";
@@ -1223,7 +1223,7 @@ options {
 
     recursion yes;
     forwarders { ${FORWARDER}; };
-
+    forward first;
     dnssec-validation no;
 
     managed-keys-directory "/var/named/dynamic";
@@ -1249,12 +1249,6 @@ zone "${DOMAIN_NAME}" IN {
     file "forward.${DOMAIN_NAME}";
     allow-update { none; };
 };
-
-zone "0.0.127.in-addr.arpa" IN {
-    type master;
-    file "named.loopback";
-    allow-update { none; };
-};
 EOF
 
 # Извлечение первых трех октетов IP для обратной зоны
@@ -1275,7 +1269,7 @@ echo "Создание файла прямой зоны..."
 # Создание файла прямой зоны
 cat > /var/named/forward.${DOMAIN_NAME} << EOF
 \$TTL 86400
-@   IN SOA  ${DOMAIN_NAME}. root.${DOMAIN_NAME} (
+@   IN SOA  ${DOMAIN_NAME}. root.${DOMAIN_NAME}. (
         $(date +%Y%m%d%H)  ; Serial
         3600        ; Refresh
         1800        ; Retry
@@ -1283,17 +1277,14 @@ cat > /var/named/forward.${DOMAIN_NAME} << EOF
         86400       ; Minimum TTL
 )
 
-@       IN  NS      hq-rtr.${DOMAIN_NAME}.
-@       IN  A       ${DNS_IP}
+    IN  NS  ${DOMAIN_NAME}.
+    IN  A       ${DNS_IP}
 
 ; Записи A и CNAME из таблицы
 hq-rtr          IN  A       ${DNS_IP}
-hq-rtr          IN  PTR     ${DNS_IP}
 br-rtr          IN  A       ${DNS_IP}
 hq-srv          IN  A       ${DNS_IP}
-hq-srv          IN  PTR     ${DNS_IP}
 hq-cli          IN  A       ${DNS_IP}
-hq-cli          IN  PTR     ${DNS_IP}
 br-srv          IN  A       ${DNS_IP}
 moodle          IN  CNAME   hq-rtr
 wiki            IN  CNAME   hq-rtr
@@ -1307,7 +1298,7 @@ echo "Создание файла обратной зоны..."
 # Создание файла обратной зоны
 cat > /var/named/reverse.${DOMAIN_NAME} << EOF
 \$TTL 86400
-@   IN SOA  ${DOMAIN_NAME}. root.${DOMAIN_NAME} (
+@   IN SOA  ${DOMAIN_NAME}. root.${DOMAIN_NAME}. (
         $(date +%Y%m%d%H)  ; Serial
         3600        ; Refresh
         1800        ; Retry
@@ -1315,7 +1306,7 @@ cat > /var/named/reverse.${DOMAIN_NAME} << EOF
         86400       ; Minimum TTL
 )
 
-@       IN  NS      hq-rtr.${DOMAIN_NAME}.
+    IN  NS  ${DOMAIN_NAME}.
 
 ; Обратные записи PTR
 ${LAST_OCTET}    IN  PTR     hq-rtr.${DOMAIN_NAME}.
