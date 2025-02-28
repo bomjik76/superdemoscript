@@ -37,7 +37,9 @@ show_menu() {
     echo "29. Проверка IP и пинга"
     echo "30. Настроить RAID5"
     echo "31. Настроить Ansible"
-    echo "32. Выход"
+    echo "32. Установить и настроить SAMBA DC"
+    echo "33. Настроить статическую трансляцию портов"
+    echo "34. Выход"
     echo "============================================"
 }
 
@@ -76,11 +78,11 @@ PASSWORD_NET="P@\$\$word"
 USER_ID="1111"
 USERNAME_SSH="ssh_user"
 # Добавляем новые переменные
-PORT_SSH=2222
-POPITKA=3
+PORT_SSH="2222"
+POPITKA="3"
 BANNER_PATH="/etc/ssh-banner"
 #backup
-BACKUP_DIR=/var/backup
+BACKUP_DIR="/var/backup"
 # Переменные wordpress
 DB_NAME="wordpress"
 DB_USER="wpuser"
@@ -91,7 +93,7 @@ ADMIN_EMAIL="admin@example.com"
 SITE_TITLE="C1-21 - Pavel"
 SITE_URL="http://192.168.220.5"
 #CHRONY
-local_stratum=6
+local_stratum="6"
 #RAID1 и RAID5
 DISK1="/dev/sdb"
 DISK2="/dev/sdc"
@@ -109,7 +111,7 @@ PRINTER_NAME="Virtual_PDF_Printer"
 #client NFS
 NFS_SERVER="22.22.22.2"  # IP адрес сервера NFS
 NFS_EXPORT="/obmen/nfs"  # Экспортированная папка на сервере
-MOUNT_DIR="/mnt/nfs"     # Точка монтирования на клиенте
+MOUNT_DIRNFS="/mnt/nfs"     # Точка монтирования на клиенте
 # клиент CHRONY
 CHRONY_SERVER="172.16.220.1"
 #PostgreSQL и pgAdmin4
@@ -143,11 +145,19 @@ ANSIBLE_HQ_SRV_IP="192.168.100.2"
 ANSIBLE_HQ_CLI_IP="192.168.100.3"
 ANSIBLE_HQ_RTR_IP="172.16.4.2"
 ANSIBLE_BR_RTR_IP="172.16.5.2"
-ANSIBLE_SSH_PORT=2024
+ANSIBLE_SSH_PORT="2024"
 ANSIBLE_SSH_USER="sshuser"
 ANSIBLE_USER_CLI="user"
 ANSIBLE_USER_RTR="net_admin"
-
+# SAMBA DC
+domain_name="DEMO.RTK"
+dc_name="br-srv"
+dc_ip="192.168.1.1"
+#статическая трансляцию портов
+ip11="172.16.5.2"
+ip22="172.16.4.2"
+portp="80"
+portp2="8080"
 # Функция настройки имени хоста
 configure_hostname() {
     read -p "Введите новое имя хоста (по умолчанию: $HOSTNAME): " new_hostname
@@ -518,24 +528,24 @@ configure_nfs_client() {
     # Запрос необходимых переменных
     read -p "Введите IP адрес NFS сервера (по умолчанию: $NFS_SERVER): " input_nfs_server
     read -p "Введите экспортированную папку (по умолчанию: $NFS_EXPORT): " input_nfs_export
-    read -p "Введите точку монтирования (по умолчанию: $MOUNT_DIR): " input_mount_dir
+    read -p "Введите точку монтирования (по умолчанию: $MOUNT_DIRNFS): " input_mount_dir
     NFS_SERVER=${input_nfs_server:-$NFS_SERVER}
     NFS_EXPORT=${input_nfs_export:-$NFS_EXPORT}
-    MOUNT_DIR=${input_mount_dir:-$MOUNT_DIR}
+    MOUNT_DIRNFS=${input_mount_dir:-$MOUNT_DIRNFS}
 
     # Устанавливаем необходимые пакеты
     dnf install -y nfs-utils
     # Создаем точку монтирования
-    mkdir -p $MOUNT_DIR
+    mkdir -p $MOUNT_DIRNFS
     # Добавляем запись в /etc/fstab для автомонтирования
     if ! grep -q "$NFS_SERVER:$NFS_EXPORT" /etc/fstab; then
-        echo "$NFS_SERVER:$NFS_EXPORT $MOUNT_DIR nfs defaults 0 0" >> /etc/fstab
+        echo "$NFS_SERVER:$NFS_EXPORT $MOUNT_DIRNFS nfs defaults 0 0" >> /etc/fstab
     fi
     # Монтируем экспортированную папку
     mount -a
     # Проверяем статус монтирования
-    if mountpoint -q $MOUNT_DIR; then
-        echo "NFS успешно смонтирован в $MOUNT_DIR."
+    if mountpoint -q $MOUNT_DIRNFS; then
+        echo "NFS успешно смонтирован в $MOUNT_DIRNFS."
     else
         echo "Ошибка монтирования NFS. Проверьте настройки."
         exit 1
@@ -1430,10 +1440,105 @@ EOF
     read -p "Нажмите Enter для продолжения..."
 }
 
+# Функция установки и настройки SAMBA DC
+install_samba_dc() {
+    # Запрос имени домена с значением по умолчанию
+    read -p "Введите имя домена (по умолчанию: $domain_name): " input_domain_name
+    domain_name=${input_domain_name:-$domain_name}
+    DDDD=${domain_name^^}  # Преобразование в верхний регистр
+    read -p "Введите имя контроллера домена (по умолчанию: $dc_name): " input_dc_name
+    dc_name=${input_dc_name:-$dc_name}
+    read -p "Введите IP-адрес контроллера домена (по умолчанию: $dc_ip): " input_dc_ip
+    dc_ip=${input_dc_ip:-$dc_ip}
+
+    #dnf -y makecache && dnf -y upgrade
+    dnf install -y samba* krb5* bind
+    setenforce 0
+    sed -i "s/SELINUX=enforcing/SELINUX=permissive/" /etc/selinux/config
+    # Создание резервной копии конфигурационных файлов
+    mv /etc/samba/smb.conf /etc/samba/smb.conf.bak
+    cp /etc/krb5.conf /etc/krb5.conf.bak
+    chown root:named /etc/krb5.conf
+
+    # Настройка файла /etc/krb5.conf
+    cat > /etc/krb5.conf << EOF
+includedir /etc/krb5.conf.d/
+
+[logging]
+    default = FILE:/var/log/krb5libs.log
+    kdc = FILE:/var/log/krb5kdc.log
+    admin_server = FILE:/var/log/kadmind.log
+
+[libdefaults]
+    dns_lookup_realm = false
+    ticket_lifetime = 24h
+    renew_lifetime = 7d
+    forwardable = true
+    rdns = false
+    pkinit_anchors = FILE:/etc/pki/tls/certs/ca-bundle.crt
+    spake_preauth_groups = edwards25519
+    dns_canonicalize_hostname = fallback
+    qualify_shortname = ""
+    default_realm = $DDDD
+    default_ccache_name = KEYRING:persistent:%{uid}
+
+[realms]
+    $DDDD = {
+    kdc = $dc_name.$domain_name
+    admin_server = $dc_name.$domain_name
+}
+
+[domain_realm]
+    .$domain_name = $DDDD
+    $domain_name = $DDDD
+EOF
+
+cat > /etc/krb5.conf.d/crypto-policies << EOF
+[libdefaults]
+    default_tgs_enctypes = aes256-cts-hmac-sha1-96 aes128-cts-hmac-sha1-96 RC4-HMAC DES-CBC-CRC DES3-CBC-SHA1 DES-CBC-MD5
+    default_tkt_enctypes = aes256-cts-hmac-sha1-96 aes128-cts-hmac-sha1-96 RC4-HMAC DES-CBC-CRC DES3-CBC-SHA1 DES-CBC-MD5
+    preferred_enctypes = aes256-cts-hmac-sha1-96 aes128-cts-hmac-sha1-96 RC4-HMAC DES-CBC-CRC DES3-CBC-SHA1 DES-CBC-MD5
+EOF
+
+samba-tool domain provision --use-rfc2307 --interactive
+    # Настройка конфигурации Samba
+    # Запуск и включение службы SAMBA
+    systemctl enable samba --now
+    # Проверка конфигурации
+    testparm
+read -p "Нажмите Enter для продолжения..."
+    echo "SAMBA DC успешно установлен и запущен."
+}
+
+# Функция настройки статической трансляции портов
+configure_port_forwarding() {
+    # Запрос IP-адреса и портов с значениями по умолчанию
+    read -p "Введите IP-адрес роутера для проброса порта (по умолчанию: $ip11): " input_ip11
+    ip11=${input_ip11:-$ip11}
+    read -p "Введите порт роутера для проброса (по умолчанию: $portp): " input_portp
+    portp=${input_portp:-$portp}
+    read -p "Введите IP-адрес сервера на кого пробросить порт  (по умолчанию: $ip22): " input_ip22
+    ip22=${input_ip22:-$ip22}
+    read -p "Введите порт сервера для проброса (по умолчанию: $portp2): " input_portp2
+    portp2=${input_portp2:-$portp2}
+    # Добавление правил в существующий файл nftables
+    cat >> /etc/nftables/isp.nft << EOF
+# Проброс порта 80 на порт $BR_SRV_PORT на BR-SRV
+table ip filter {
+    chain prerouting {
+        type filter hook prerouting priority filter; policy accept;
+        ip daddr $ip11 tcp dport $portp dnat ip to $ip22:$portp2
+    }
+}
+EOF
+
+    systemctl restart nftables
+}
+
 # Основной цикл меню
 while true; do
     show_menu
-    read -p "Выберите пункт меню (1-31): " choice
+    read -p "Выберите пункт меню (1-34): " choice
     case $choice in
         1) configure_hostname ;;
         2) configure_network ;;
@@ -1466,7 +1571,9 @@ while true; do
         29) check_ip_and_ping ;;
         30) configure_raid5 ;;
         31) configure_ansible ;;
-        32) echo "Выход из программы..."; exit 0 ;;
+        32) install_samba_dc ;;
+        33) configure_port_forwarding ;;  # Новый пункт меню
+        34) echo "Выход из программы..."; exit 0 ;;
         *) echo "Неверный выбор. Нажмите Enter для продолжения..."; read ;;
     esac
 done
