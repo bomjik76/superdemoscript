@@ -119,13 +119,18 @@ EMAIL="pasha@gmail.com"
 ADMIN_PASSWORD="QWEasd11"
 POSTGRES_PASSWORD="QWEasd11"
 #MediaWiki
-MEDIAPORT="8081"
-MEDIADB_NAME="db"
+MEDIAPORT="8080"
+MEDIADB_NAME="mariadb"
 MEDIA="mediawiki"
 MEDIADB_USER="wiki"
-MEDIADB_PASS="P@ssw0rd"
+MEDIADB_PASS="WikiP@ssw0rd"
 #PROXY NGINX
-PROXYPORT="3000"
+IPHQ_SRV="192.168.1.2"
+IPBR_SRV="192.168.1.3"
+name="moodle.au-team.irpo"
+name2="wiki.au-team.irpo"
+pp1="80"
+pp2="8080"
 # rsyslog
 DB_ROOT_USERRSYS="root"
 DB_ROOT_PASSWORDRSYS="QWEasd11"
@@ -158,6 +163,10 @@ ip11="172.16.5.2"
 ip22="172.16.4.2"
 portp="80"
 portp2="8080"
+#MOODLE
+MOODLE_USER="moodle"
+MOODLE_PASS="P@ssw0rd"
+MOODLE_DB="moodledb"
 # Функция настройки имени хоста
 configure_hostname() {
     read -p "Введите новое имя хоста (по умолчанию: $HOSTNAME): " new_hostname
@@ -824,46 +833,31 @@ install_wordpress() {
 
 # Функция установки и настройки веб-сервера LMS Apache
 install_lms_apache() {
-    echo "Установка и настройка веб-сервера LMS Apache..."
-
+    # Переменные для Moodle
+    read -p "Введите имя пользователя Moodle (по умолчанию: $MOODLE_USER): " input_moodle_user
+    read -p "Введите пароль пользователя Moodle (по умолчанию: $MOODLE_PASS): " input_moodle_pass  
+    read -p "Введите имя базы данных Moodle (по умолчанию: $MOODLE_DB): " input_moodle_db
+    MOODLE_USER=${input_moodle_user:-$MOODLE_USER}
+    MOODLE_PASS=${input_moodle_pass:-$MOODLE_PASS}
+    MOODLE_DB=${input_moodle_db:-$MOODLE_DB}
     # Настройка SELinux
-    echo "Настройка SELinux..."
     sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config
     setenforce 0
-
     # Установка веб-сервера Apache
-    echo "Установка Apache..."
     dnf install -y httpd
-
-    # Запуск службы httpd и добавление в автозагрузку
-    echo "Запуск и включение службы Apache..."
     systemctl enable httpd --now
-
-    # Проверка успешной установки Apache
-    echo "Проверка установки Apache..."
-    if systemctl status httpd | grep "active (running)"; then
-        echo "Apache успешно установлен и запущен."
-    else
-        echo "Ошибка: Apache не запущен."
-        exit 1
-    fi
-
     dnf install -y php83-release
     dnf clean all
     dnf makecache
     dnf update php*
-
     # Установка PHP и необходимых расширений
     echo "Установка PHP и необходимых расширений..."
     dnf install -y php php-mysqlnd php-pdo php-gd php-mbstring php-zip php-intl php-soap
-
     # Настройка php.ini
     echo "Настройка php.ini..."
     sed -i '8i max_input_vars=6000' /etc/php.ini
-
     systemctl restart httpd
     systemctl restart php-fpm
-
     # Установка и настройка MariaDB
     echo "Установка и настройка MariaDB..."
     dnf install -y mariadb-server mariadb
@@ -873,55 +867,50 @@ install_lms_apache() {
 
     # Создание базы данных и пользователя
     echo "Создание базы данных и пользователя для LMS..."
-    mysql -e "CREATE DATABASE moodledb DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci;"
-    mysql -e "CREATE USER 'moodleuser'@'localhost' IDENTIFIED BY 'QWEasd11';"
-    mysql -e "GRANT ALL ON moodledb.* TO 'moodleuser'@'localhost';"
+    mysql -e "CREATE DATABASE $MOODLE_DB DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci;"
+    mysql -e "CREATE USER '$MOODLE_USER'@'localhost' IDENTIFIED BY '$MOODLE_PASS';"
+    mysql -e "GRANT ALL ON $MOODLE_DB.* TO '$MOODLE_USER'@'localhost';"
     mysql -e "FLUSH PRIVILEGES;"
-
     # Установка Moodle
     echo "Установка Moodle..."
     wget https://packaging.moodle.org/stable405/moodle-latest-405.tgz -P /tmp
     tar -xzf /tmp/moodle-latest-405.tgz -C /var/www/html
     chown -R apache:apache /var/www/html/moodle
     chmod -R 0755 /var/www/html/moodle
-
     # Создание каталога данных для Moodle
     echo "Создание каталога данных для Moodle..."
     mkdir /var/moodledata
     chown -R apache:apache /var/moodledata
     chmod -R 0755 /var/moodledata
-
-    # Перезапуск Apache
-    echo "Перезапуск Apache..."
+    # Перезапуск Apache"
     systemctl restart httpd
 
-    echo "Установка и настройка LMS Apache завершены. Перейдите по адресу http://<IP-сервера>/moodle для завершения настройки."
+    echo "Перейдите по адресу http://<IP-сервера>/moodle
+    /var/moodledata
+    mariadb родной
+    $MOODLE_DB
+    $MOODLE_USER
+    $MOODLE_PASS"
+    read -p "Нажмите Enter для продолжения..."
 }
 
 # Функция установки и настройки MediaWiki с использованием Docker
 install_mediawiki() {
-    echo "Установка и настройка MediaWiki с использованием Docker..."
-
-    # Установка Docker и Docker Compose
-    echo "Установка Docker..."
-    dnf install -y docker-ce docker-ce-cli
-    systemctl enable docker --now
-
-    echo "Установка Docker Compose..."
-    dnf install -y docker-compose
-
     # Запрос необходимых переменных с использованием значений по умолчанию
     read -p "Введите порт для MediaWiki (по умолчанию: $MEDIAPORT): " input_media_port
-    read -p "Введите имя контейнера (по умолчанию: $MEDIADB_NAME): " input_media_db_name
-    read -p "Введите имя базы данных (по умолчанию: $MEDIA): " input_media
+    read -p "Введите имя контейнера c базой данных (по умолчанию: $MEDIADB_NAME): " input_media_db_name
+    read -p "Введите название базы данных (по умолчанию: $MEDIA): " input_media
     read -p "Введите имя пользователя базы данных (по умолчанию: $MEDIADB_USER): " input_media_db_user
     read -p "Введите пароль для пользователя базы данных (по умолчанию: $MEDIADB_PASS): " input_media_db_pass
-
     MEDIAPORT=${input_media_port:-$MEDIAPORT}
     MEDIADB_NAME=${input_media_db_name:-$MEDIADB_NAME}
     MEDIA=${input_media:-$MEDIA}
     MEDIADB_USER=${input_media_db_user:-$MEDIADB_USER}
     MEDIADB_PASS=${input_media_db_pass:-$MEDIADB_PASS}
+    # Установка Docker и Docker Compose
+    echo "Установка Docker..."
+    dnf install -y docker-ce docker-ce-cli docker-compose
+    systemctl enable docker --now
     # Создание файла docker-compose.yml
     echo "Создание файла docker-compose.yml..."
     cat <<EOL > ~/wiki.yml
@@ -939,7 +928,7 @@ services:
       # - ./LocalSettings.php:/var/www/html/LocalSettings.php
   database:
     container_name: $MEDIADB_NAME
-    image: mysql
+    image: mariadb
     environment:
       MYSQL_DATABASE: $MEDIA
       MYSQL_USER: $MEDIADB_USER
@@ -955,21 +944,18 @@ volumes:
 EOL
 
     # Создание volume для базы данных
-    echo "Создание volume для базы данных..."
     docker volume create dbvolume
-
     # Запуск стека контейнеров
-    echo "Запуск MediaWiki и базы данных..."
     docker-compose -f ~/wiki.yml up -d
-
-    # Проверка доступности MediaWiki
-    echo "Проверка доступности MediaWiki на порту $MEDIAPORT..."
-    if curl -s --head http://localhost:$MEDIAPORT | grep "200 OK" > /dev/null; then
-        echo "MediaWiki доступен по адресу http://localhost:$MEDIAPORT"
-    else
-        echo "Ошибка: MediaWiki недоступен."
-        exit 1
-    fi
+    echo "Хост базы данных: $MEDIADB_NAME
+    Имя базы данных: $MEDIA
+    Имя пользователя базы данных: $MEDIADB_USER
+    Пароль базы данных: $MEDIADB_PASS
+    Название вики: Demo-Wiki
+    nano wiki.yml
+    docker-compose -f wiki.yml stop
+    docker-compose -f wiki.yml up -d"
+    read -p "Нажмите Enter для продолжения..."
 }
 
 # Функция установки и настройки сервера IPA
@@ -1100,28 +1086,43 @@ EOF
 
 # Функция установки и настройки обратного прокси-сервера Nginx
 install_nginx_reverse_proxy() {
-    echo "Установка и настройка обратного прокси-сервера Nginx..."
-    # Установка Nginx
-    read -p "Введите порт на который пререправлять (по умолчанию: $PROXYPORT): " input_proxyport
-    PROXYPORT=${input_proxyport:-$PROXYPORT}
+    # Запрос IP-адресов и доменных имен с использованием значений по умолчанию
+    read -p "Введите IP-адрес HQ-SRV(moodle) (по умолчанию: $IPHQ_SRV): " input_ip_hq
+    IPHQ_SRV=${input_ip_hq:-$IPHQ_SRV}
+    read -p "Введите IP-адрес BR-SRV(mediwiki) (по умолчанию: $IPBR_SRV): " input_ip_br
+    IPBR_SRV=${input_ip_br:-$IPBR_SRV}
+    read -p "Введите доменное имя для Moodle (по умолчанию: $name): " input_name
+    name=${input_name:-$name}
+    read -p "Введите доменное имя для Wiki (по умолчанию: $name2): " input_name2
+    name2=${input_name2:-$name2}
+    read -p "Введите порт Wiki (по умолчанию: $pp2): " input_pp2
+    pp2=${input_pp2:-$pp2}
+    read -p "Введите порт для Moodle (по умолчанию: $pp1): " input_pp1
+    pp1=${input_pp1:-$pp1}
     dnf install -y nginx
     setenforce 0
     setsebool -P httpd_can_network_connect 1
-    # Получение имени хоста
-    # Получение IP-адреса первого интерфейса
-    IP1=$(ip -o -4 addr show $INTERFACE_1 | awk '{print $4}' | cut -d'/' -f1)
-cat << EOF > /etc/nginx/conf.d/proxy.conf
+    systemctl enable --now nginx
+    # Создание конфигурации Nginx
+    sed -i '67d' /etc/nginx/nginx.conf
+    cat << EOF >> /etc/nginx/nginx.conf
 server {
-    listen 80;
-    server_name $IP1;
+        listen 80;
+        server_name $name;
 
-    location / {
-        proxy_pass http://127.0.0.1:$PROXYPORT;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
+        location / {
+            proxy_pass http://$IPHQ_SRV:$pp1;
+        }
+}
+
+server {
+        listen 80;
+        server_name $name2;
+
+        location / {
+            proxy_pass http://$IPBR_SRV:$pp2;
+        }
+}
 }
 EOF
     # Перезапуск Nginx
