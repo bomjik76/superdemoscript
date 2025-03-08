@@ -155,7 +155,7 @@ ANSIBLE_SSH_USER="sshuser"
 ANSIBLE_USER_CLI="user"
 ANSIBLE_USER_RTR="net_admin"
 # SAMBA DC
-domain_name="DEMO.RTK"
+domain_name="demo.rtk"
 dc_name="br-srv"
 dc_ip="192.168.1.1"
 #статическая трансляцию портов
@@ -1408,16 +1408,22 @@ install_samba_dc() {
     dc_name=${input_dc_name:-$dc_name}
     read -p "Введите IP-адрес контроллера домена (по умолчанию: $dc_ip): " input_dc_ip
     dc_ip=${input_dc_ip:-$dc_ip}
+    
+cat > /etc/resolv.conf << EOF
+nameserver 8.8.8.8 
+nameserver $dc_ip
+search $domain_name
+EOF
 
-    #dnf -y makecache && dnf -y upgrade
-    dnf install -y samba* krb5* bind
+    hostnamectl set-hostname $dc_name.$domain_name
     setenforce 0
     sed -i "s/SELINUX=enforcing/SELINUX=permissive/" /etc/selinux/config
+    dnf install -y samba* krb5* bind
     # Создание резервной копии конфигурационных файлов
     mv /etc/samba/smb.conf /etc/samba/smb.conf.bak
     cp /etc/krb5.conf /etc/krb5.conf.bak
     chown root:named /etc/krb5.conf
-
+    
     # Настройка файла /etc/krb5.conf
     cat > /etc/krb5.conf << EOF
 includedir /etc/krb5.conf.d/
@@ -1458,10 +1464,51 @@ cat > /etc/krb5.conf.d/crypto-policies << EOF
     preferred_enctypes = aes256-cts-hmac-sha1-96 aes128-cts-hmac-sha1-96 RC4-HMAC DES-CBC-CRC DES3-CBC-SHA1 DES-CBC-MD5
 EOF
 
+cat > /etc/named.conf << EOF
+options {
+listen-on port 53 { $dc_ip; };
+listen-on-v6 port 53 { ::1; };
+directory "/var/named";
+dump-file "/var/named/data/cache_dump.db";
+statistics-file "/var/named/data/named_stats.txt";
+memstatistics-file "/var/named/data/named_mem_stats.txt";
+secroots-file "/var/named/data/named.secroots";
+recursing-file "/var/named/data/named.recursing";
+allow-query { any; };
+recursion yes;
+dnssec-validation no;
+managed-keys-directory "/var/named/dynamic";
+geoip-directory "/usr/share/GeoIP";
+pid-file "/run/named/named.pid";
+session-keyfile "/run/named/session.key";
+tkey-gssapi-keytab "/var/lib/samba/bind-dns/dns.keytab";
+minimal-responses yes;
+forwarders { 8.8.8.8;};
+include "/etc/crypto-policies/back-ends/bind.config";
+};
+
+logging {
+channel default_debug {
+file "data/named.run";
+severity dynamic;
+};
+};
+
+zone "." IN {
+type hint;
+file "named.ca";
+};
+
+include "/etc/named.rfc1912.zones";
+include "/etc/named.root.key";
+include "/var/lib/samba/bind-dns/named.conf";
+EOF
+
 samba-tool domain provision --use-rfc2307 --interactive
-    # Настройка конфигурации Samba
     # Запуск и включение службы SAMBA
-    systemctl enable samba --now
+    testparm
+    systemctl enable samba named --now
+    systemctl status samba named
     # Проверка конфигурации
     testparm
 read -p "Нажмите Enter для продолжения..."
