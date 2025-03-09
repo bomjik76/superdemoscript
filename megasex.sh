@@ -876,9 +876,10 @@ install_lms_apache() {
     # Установка Moodle
     echo "Установка Moodle..."
     wget https://packaging.moodle.org/stable405/moodle-latest-405.tgz -P /tmp
-    tar -xzf /tmp/moodle-latest-405.tgz -C /var/www/html
-    chown -R apache:apache /var/www/html/moodle
-    chmod -R 0755 /var/www/html/moodle
+    tar -xzf /tmp/moodle-latest-405.tgz -C /tmp
+    mv -f /tmp/moodle/{.,}* /var/www/html/
+    chmod -R 0755 /var/www/html/
+    chown -R apache:apache /var/www/html/
     # Создание каталога данных для Moodle
     echo "Создание каталога данных для Moodle..."
     mkdir /var/moodledata
@@ -887,7 +888,7 @@ install_lms_apache() {
     # Перезапуск Apache"
     systemctl restart httpd
 
-    echo "Перейдите по адресу http://<IP-сервера>/moodle
+    echo "Перейдите по адресу http://<IP-сервера>
     /var/moodledata
     mariadb родной
     $MOODLE_DB
@@ -1535,7 +1536,7 @@ configure_port_forwarding() {
 # Проброс порта 80 на порт $BR_SRV_PORT на BR-SRV
 table ip filter {
     chain prerouting {
-        type filter hook prerouting priority filter; policy accept;
+        type nat hook prerouting priority filter; policy accept;
         ip daddr $ip11 tcp dport $portp dnat ip to $ip22:$portp2
     }
 }
