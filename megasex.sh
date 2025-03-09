@@ -38,8 +38,9 @@ show_menu() {
     echo "30. Настроить RAID5"
     echo "31. Настроить Ansible"
     echo "32. Установить и настроить SAMBA DC"
-    echo "33. Настроить статическую трансляцию портов"
-    echo "34. Выход"
+    echo "33. Войти в SAMBA DC"
+    echo "34. Настроить статическую трансляцию портов"
+    echo "35. Выход"
     echo "============================================"
 }
 
@@ -158,6 +159,7 @@ ANSIBLE_USER_RTR="net_admin"
 domain_name="demo.rtk"
 dc_name="br-srv"
 dc_ip="192.168.1.1"
+sambaps="QWEasd11"
 #статическая трансляцию портов
 ip11="172.16.5.2"
 ip22="172.16.4.2"
@@ -1408,6 +1410,8 @@ install_samba_dc() {
     dc_name=${input_dc_name:-$dc_name}
     read -p "Введите IP-адрес контроллера домена (по умолчанию: $dc_ip): " input_dc_ip
     dc_ip=${input_dc_ip:-$dc_ip}
+    read -p "Введите пароль администратора домена (по умолчанию: $sambaps): " input_sambaps
+    sambaps=${input_sambaps:-$sambaps}
     
 cat > /etc/resolv.conf << EOF
 nameserver 8.8.8.8 
@@ -1503,8 +1507,9 @@ include "/etc/named.rfc1912.zones";
 include "/etc/named.root.key";
 include "/var/lib/samba/bind-dns/named.conf";
 EOF
+first_part=$(echo "$domain_name" | cut -d '.' -f 1)
 
-samba-tool domain provision --use-rfc2307 --interactive
+samba-tool domain provision --realm="$domain_name" --domain="$first_part" --adminpass="$sambaps" --dns-backend=BIND9_DLZ --server-role=dc --use-rfc2307
     # Запуск и включение службы SAMBA
     testparm
     systemctl enable samba named --now
@@ -1512,7 +1517,6 @@ samba-tool domain provision --use-rfc2307 --interactive
     # Проверка конфигурации
     testparm
 read -p "Нажмите Enter для продолжения..."
-    echo "SAMBA DC успешно установлен и запущен."
 }
 
 # Функция настройки статической трансляции портов
@@ -1538,6 +1542,26 @@ table ip filter {
 EOF
 
     systemctl restart nftables
+}
+
+# Функция настройки клиента для входа в домен Samba DC
+join_samba_domain() {
+    # Запрос имени домена
+    read -p "Введите имя домена (по умолчанию: $domain_name): " input_domain_name
+    domain_name=${input_domain_name:-$domain_name}
+    # Запрос имени контроллера домена
+    read -p "Введите имя контроллера домена (по умолчанию: $dc_name): " input_dc_name
+    dc_name=${input_dc_name:-$dc_name}
+    read -p "Введите IP-адрес контроллера домена (по умолчанию: $dc_ip): " input_dc_ip
+    dc_ip=${input_dc_ip:-$dc_ip}
+
+cat > /etc/resolv.conf << EOF
+nameserver $dc_ip
+search $domain_name
+EOF
+    echo "$dc_ip $dc_name.$domain_name $dc_name" >> /etc/hosts
+    join-to-domain.sh
+    read -p "Нажмите Enter для продолжения..."
 }
 
 # Основной цикл меню
@@ -1577,8 +1601,9 @@ while true; do
         30) configure_raid5 ;;
         31) configure_ansible ;;
         32) install_samba_dc ;;
-        33) configure_port_forwarding ;;  # Новый пункт меню
-        34) echo "Выход из программы..."; exit 0 ;;
+        33) join_samba_domain ;;
+        34) configure_port_forwarding ;;  # Новый пункт меню
+        35) echo "Выход из программы..."; exit 0 ;;
         *) echo "Неверный выбор. Нажмите Enter для продолжения..."; read ;;
     esac
 done
