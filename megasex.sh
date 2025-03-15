@@ -1172,7 +1172,7 @@ dnf install -y bind bind-utils
 # Создание основного конфигурационного файла
 cat > /etc/named.conf << EOF
 options {
-    listen-on port 53 { 127.0.0.1; $DNS_IP; };
+    listen-on port 53 { $DNS_IP; };
     listen-on-v6 port 53 { none; };
     directory     "/var/named";
     dump-file     "/var/named/data/cache_dump.db";
