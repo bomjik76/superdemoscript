@@ -3,9 +3,6 @@
 # Функция для отображения меню
 show_menu() {
     clear
-    echo "============================================"
-    echo "                  DEMOEBLAN                 "
-    echo "============================================"
     echo "1. Настроить имя хоста"
     echo "2. Настроить сетевые интерфейсы"
     echo "3. Настроить часовой пояс"
@@ -145,7 +142,7 @@ RSYSLOG_SERVER="192.168.1.1"
 DOMAIN_NAME="au-team.irpo"
 DNS_IP="172.16.1.1"
 ALLOWED_NETWORK="any"
-FORWARDER="8.8.8.8"
+FORWARDER="77.88.8.8"
 ADMIN_EMAIL="admin.${DOMAIN_NAME}."
 # Переменные для Ansible
 ANSIBLE_HQ_SRV_IP="192.168.100.2"
@@ -154,8 +151,8 @@ ANSIBLE_HQ_RTR_IP="172.16.4.2"
 ANSIBLE_BR_RTR_IP="172.16.5.2"
 ANSIBLE_SSH_PORT="2024"
 ANSIBLE_SSH_USER="sshuser"
-ANSIBLE_USER_CLI="user"
-ANSIBLE_USER_RTR="net_admin"
+ANSIBLE_USER_CLI="root"
+ANSIBLE_USER_RTR="root"
 # SAMBA DC
 domain_name="demo.rtk"
 dc_name="br-srv"
@@ -922,7 +919,7 @@ services:
       MYSQL_PASSWORD: $MEDIADB_PASS
       MYSQL_RANDOM_ROOT_PASSWORD: 'yes'
     volumes:
-      - dbvolume:/var/lib/mysql
+      - dbvolume:/var/lib/mariadb
 volumes:
   dbvolume:
       external: true
