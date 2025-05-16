@@ -38,7 +38,9 @@ show_menu() {
     echo "33. Установить и настроить SAMBA DC"
     echo "34. Войти в SAMBA DC"
     echo "35. Настроить статическую трансляцию портов"
-    echo "36. Выход"
+    echo "36. Добавить пользователей и группы SAMBA"
+    echo "37. Добавить пользователей SAMBA из CSV"
+    echo "38. Выход"
     echo "============================================"
 }
 
@@ -1505,6 +1507,15 @@ samba-tool domain provision --realm="$domain_name" --domain="$first_part" --admi
 read -p "Нажмите Enter для продолжения..."
 }
 
+    samba-tool user add user1.hq QWEasd123
+    samba-tool user add user2.hq QWEasd123
+    samba-tool user add user3.hq QWEasd123
+    samba-tool user add user4.hq QWEasd123
+    samba-tool user add user5.hq QWEasd123
+    samba-tool group add hq
+    samba-tool group addmembers hq user1.hq,user2.hq,user3.hq,user4.hq,user5.hq
+    samba-tool user list
+
 # Функция настройки статической трансляции портов
 configure_port_forwarding() {
     # Запрос IP-адреса и портов с значениями по умолчанию
@@ -1583,10 +1594,56 @@ configure_raid0() {
     echo "UUID=$UUID $MOUNT_DIR ext4 defaults 0 0" >> /etc/fstab
 }
 
+# Функция добавления пользователей и групп SAMBA
+add_samba_users_and_groups() {
+    echo "Добавление пользователей и групп в SAMBA DC..."
+    # Запрос имени домена с значением по умолчанию
+    read -p "Введите имя домена (например, hq для user1.hq): " samba_user_domain_suffix
+    samba_user_domain_suffix=${samba_user_domain_suffix:-hq}
+
+    samba-tool user add user1.$samba_user_domain_suffix QWEasd123
+    samba-tool user add user2.$samba_user_domain_suffix QWEasd123
+    samba-tool user add user3.$samba_user_domain_suffix QWEasd123
+    samba-tool user add user4.$samba_user_domain_suffix QWEasd123
+    samba-tool user add user5.$samba_user_domain_suffix QWEasd123
+    samba-tool group add $samba_user_domain_suffix
+    samba-tool group addmembers $samba_user_domain_suffix user1.$samba_user_domain_suffix,user2.$samba_user_domain_suffix,user3.$samba_user_domain_suffix,user4.$samba_user_domain_suffix,user5.$samba_user_domain_suffix
+    samba-tool user list
+    echo "Пользователи и группы SAMBA добавлены."
+    read -p "Нажмите Enter для продолжения..."
+}
+
+# Функция добавления пользователей SAMBA из CSV
+add_samba_users_from_csv() {
+    echo "Добавление пользователей SAMBA из CSV файла..."
+    read -p "Введите путь к CSV файлу (по умолчанию: /opt/Users.csv): " FILE_PATH
+    FILE_PATH=${FILE_PATH:-/opt/Users.csv} # Use default if no input
+
+    if [ ! -f "$FILE_PATH" ]; then
+        echo "Файл $FILE_PATH не найден!"
+        read -p "Нажмите Enter для продолжения..."
+        return 1
+    fi
+
+    while IFS=';' read -r firstname lastname role phone ou street zip city country password; do
+        # Пропускаем первую строку (заголовки), если она есть
+        if [[ "$firstname" == "firstname" && "$lastname" == "lastname" ]]; then
+            continue
+        fi
+        echo "Добавление пользователя: $firstname.$lastname"
+        samba-tool user add "$firstname.$lastname" "$password"
+        # Здесь можно добавить дополнительные команды, например, добавление пользователя в группу
+        # samba-tool group addmembers "$ou" "$firstname.$lastname"
+    done < <(tail -n +1 "$FILE_PATH") # tail -n +1 to process all lines including the first if it's data
+
+    echo "Пользователи SAMBA из CSV файла добавлены."
+    read -p "Нажмите Enter для продолжения..."
+}
+
 # Основной цикл меню
 while true; do
     show_menu
-    read -p "Выберите пункт меню (1-35): " choice
+    read -p "Выберите пункт меню (1-38): " choice # Updated range
     case $choice in
         1) configure_hostname ;;
         2) configure_network ;;
@@ -1622,8 +1679,10 @@ while true; do
         32) configure_ansible ;;
         33) install_samba_dc ;;
         34) join_samba_domain ;;
-        35) configure_port_forwarding ;;  # Новый пункт меню
-        36) echo "Выход из программы..."; exit 0 ;;
+        35) configure_port_forwarding ;;
+        36) add_samba_users_and_groups ;;
+        37) add_samba_users_from_csv ;;
+        38) echo "Выход из программы..."; exit 0 ;;
         *) echo "Неверный выбор. Нажмите Enter для продолжения..."; read ;;
     esac
 done
