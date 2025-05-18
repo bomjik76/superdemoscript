@@ -1507,15 +1507,6 @@ samba-tool domain provision --realm="$domain_name" --domain="$first_part" --admi
 read -p "Нажмите Enter для продолжения..."
 }
 
-    samba-tool user add user1.hq QWEasd123
-    samba-tool user add user2.hq QWEasd123
-    samba-tool user add user3.hq QWEasd123
-    samba-tool user add user4.hq QWEasd123
-    samba-tool user add user5.hq QWEasd123
-    samba-tool group add hq
-    samba-tool group addmembers hq user1.hq,user2.hq,user3.hq,user4.hq,user5.hq
-    samba-tool user list
-
 # Функция настройки статической трансляции портов
 configure_port_forwarding() {
     # Запрос IP-адреса и портов с значениями по умолчанию
@@ -1601,11 +1592,11 @@ add_samba_users_and_groups() {
     read -p "Введите имя домена (например, hq для user1.hq): " samba_user_domain_suffix
     samba_user_domain_suffix=${samba_user_domain_suffix:-hq}
 
-    samba-tool user add user1.$samba_user_domain_suffix QWEasd123
-    samba-tool user add user2.$samba_user_domain_suffix QWEasd123
-    samba-tool user add user3.$samba_user_domain_suffix QWEasd123
-    samba-tool user add user4.$samba_user_domain_suffix QWEasd123
-    samba-tool user add user5.$samba_user_domain_suffix QWEasd123
+    samba-tool user add user1.$samba_user_domain_suffix QWEasd11
+    samba-tool user add user2.$samba_user_domain_suffix QWEasd11
+    samba-tool user add user3.$samba_user_domain_suffix QWEasd11
+    samba-tool user add user4.$samba_user_domain_suffix QWEasd11
+    samba-tool user add user5.$samba_user_domain_suffix QWEasd11
     samba-tool group add $samba_user_domain_suffix
     samba-tool group addmembers $samba_user_domain_suffix user1.$samba_user_domain_suffix,user2.$samba_user_domain_suffix,user3.$samba_user_domain_suffix,user4.$samba_user_domain_suffix,user5.$samba_user_domain_suffix
     samba-tool user list

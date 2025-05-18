@@ -12,23 +12,28 @@ show_menu() {
     echo "7. Настроить FRR (OSPF)"
     echo "8. Создать системного пользователя"
     echo "9. Настроить SSH"
-    echo "10. Настроить NFS"
-    echo "11. Настроить клиента NFS"
-    echo "12. Настроить Chrony"
-    echo "13. Настроить клиента Chrony"
-    echo "14. Установить LMS Apache"
-    echo "15. Установить MediaWiki"
-    echo "16. Установить обратный прокси-сервер Nginx"
-    echo "17. Установить и настроить BIND"
-    echo "18. Настроить RAID0"
-    echo "19. Настроить RAID1"
-    echo "20. Настроить RAID5"
-    echo "21. Проверка IP и пинга"
-    echo "22. Настроить Ansible"
-    echo "23. Установить и настроить SAMBA DC"
-    echo "24. Войти в SAMBA DC"
-    echo "25. Настроить статическую трансляцию портов"
-    echo "26. Выход"
+    echo "10. Настроить CUPS"
+    echo "11. Настроить клиента CUPS"
+    echo "12. Настроить NFS"
+    echo "13. Настроить клиента NFS"
+    echo "14. Настроить Chrony"
+    echo "15. Настроить клиента Chrony"
+    echo "21. Установить LMS Apache"
+    echo "22. Установить MediaWiki"
+    echo "24. Установить обратный прокси-сервер Nginx"
+    echo "27. Установить и настроить BIND"
+    echo "28. Настроить RAID0"
+    echo "29. Настроить RAID1"
+    echo "30. Настроить RAID5"
+    echo "31. Проверка IP и пинга"
+    echo "32. Настроить Ansible"
+    echo "33. Установить и настроить SAMBA DC"
+    echo "34. Войти в SAMBA DC"
+    echo "35. Настроить статическую трансляцию портов"
+    echo "36. Добавить пользователей и группы SAMBA"
+    echo "37. Добавить пользователей SAMBA из CSV"
+    echo "38. Выход"
+    echo "="
 }
 
 # HOSTNAME 
@@ -93,7 +98,7 @@ MOUNT_DIR5="/raid5"
 #NFS
 NFS_DIR="/obmen/nfs"
 EXPORTS_FILE="/etc/exports"
-# клиент cups
+#клиент cups
 CUPS_IP="22.22.22.2"  # Укажите IP-адрес CUPS
 PRINTER_NAME="Virtual_PDF_Printer"
 #client NFS
@@ -131,7 +136,7 @@ RSYSLOG_SERVER="192.168.1.1"
 DOMAIN_NAME="au-team.irpo"
 DNS_IP="172.16.1.1"
 ALLOWED_NETWORK="any"
-FORWARDER="8.8.8.8"
+FORWARDER="77.88.8.8"
 ADMIN_EMAIL="admin.${DOMAIN_NAME}."
 # Переменные для Ansible
 ANSIBLE_HQ_SRV_IP="192.168.100.2"
@@ -140,8 +145,8 @@ ANSIBLE_HQ_RTR_IP="172.16.4.2"
 ANSIBLE_BR_RTR_IP="172.16.5.2"
 ANSIBLE_SSH_PORT="2024"
 ANSIBLE_SSH_USER="sshuser"
-ANSIBLE_USER_CLI="user"
-ANSIBLE_USER_RTR="net_admin"
+ANSIBLE_USER_CLI="root"
+ANSIBLE_USER_RTR="root"
 # SAMBA DC
 domain_name="demo.rtk"
 dc_name="br-srv"
@@ -156,7 +161,6 @@ portp2="8080"
 MOODLE_USER="moodle"
 MOODLE_PASS="P@ssw0rd"
 MOODLE_DB="moodledb"
-
 # Функция настройки имени хоста
 configure_hostname() {
     read -p "Введите новое имя хоста (по умолчанию: $HOSTNAME): " new_hostname
@@ -398,6 +402,73 @@ EOL
     echo "FRR настроен и запущен."
 }
 
+# Функция настройки CUPS
+configure_cups() {
+    echo "Установка и настройка CUPS..."
+
+    # Установка необходимых пакетов
+    dnf install -y cups cups-pdf || {
+        echo "Ошибка: Не удалось установить пакеты. Проверьте подключение к репозиторию." >&2
+        exit 1
+    }
+    # Запуск службы CUPS
+    systemctl enable cups
+    systemctl start cups
+    # Настройка виртуального PDF-принтера
+    PDF_PRINTER_NAME="Virtual_PDF_Printer"
+    lpadmin -p "$PDF_PRINTER_NAME" -E -v cups-pdf:/ -m drv:///sample.drv/generic.ppd || {
+        echo "Ошибка: Не удалось добавить принтер." >&2
+        exit 1
+    }
+    lpadmin -d "$PDF_PRINTER_NAME"
+    echo "Принтер $PDF_PRINTER_NAME успешно добавлен."
+
+    # Настройка веб-интерфейса и удаленного администрирования
+    CUPS_CONF="/etc/cups/cupsd.conf"
+    echo "Настраиваем веб-интерфейс и удаленное администрирование..."
+    if grep -q "^Port 631" "$CUPS_CONF"; then
+        echo "Веб-интерфейс уже настроен."
+    else
+        sed -i 's/^Listen localhost:631/Port 631/' "$CUPS_CONF" || {
+            echo "Ошибка: Не удалось изменить $CUPS_CONF." >&2
+            exit 1
+        }
+    fi
+    sed -i 's/<Location \/>/<Location \/>\n  Allow All\n/g' $CUPS_CONF
+    sed -i 's/<Location \/admin>/<Location \/admin>\n  Allow All\n/g' $CUPS_CONF
+    sed -i 's/<Location \/admin\/log>/<Location \/admin\/log>\n  Allow All\n/g' $CUPS_CONF
+    sed -i 's/<Location \/admin\/conf>/<Location \/admin\/conf>\n  Allow All\n/g' $CUPS_CONF
+    # Перезапуск службы CUPS
+    echo "Перезапускаем службу CUPS для применения изменений..."
+    systemctl restart cups
+    # Проверка статуса
+    systemctl status cups --no-pager
+    if [ $? -eq 0 ]; then
+        echo "CUPS успешно настроен и запущен."
+        echo "Веб-интерфейс доступен по адресу: http://<IP-адрес-сервера>:631"
+    else
+        echo "Ошибка: Не удалось запустить CUPS." >&2
+        exit 1
+    fi
+
+    echo "Настройка CUPS завершена."
+}
+
+# Функция настройки клиента CUPS
+configure_cups_client() {
+    # Запрос необходимых переменных
+    read -p "Введите IP-адрес CUPS (по умолчанию: $CUPS_IP): " input_CUPS_IP
+    read -p "Введите имя принтера (по умолчанию: $PRINTER_NAME): " input_printer_name
+    CUPS_IP=${input_CUPS_IP:-$CUPS_IP}
+    PRINTER_NAME=${input_printer_name:-$PRINTER_NAME}
+    # Установка клиента CUPS
+    dnf install -y cups-client
+    # Настройка подключения к принтеру
+    lpadmin -p "$PRINTER_NAME" -E -v ipp://$CUPS_IP:631/printers/$PRINTER_NAME
+    lpadmin -d "$PRINTER_NAME"
+    echo "Принтер $PRINTER_NAME настроен как принтер по умолчанию."
+}
+
 # Функция настройки RAID
 configure_raid1() {
     # Запрос необходимых переменных
@@ -561,6 +632,182 @@ configure_chrony_client() {
     systemctl restart chronyd
 }
 
+# Функция создания backup скрипта
+create_backup_script() {
+    echo "Создание backup скрипта..."
+
+    # Запрос имени директории для резервного копирования
+    read -p "Введите директорию для резервного копирования (например, $BACKUP_DIR): " input_backup_dir
+    BACKUP_DIR=${input_backup_dir:-$BACKUP_DIR}
+    mkdir -p "$BACKUP_DIR"
+
+    # Создание скрипта резервного копирования
+    BACKUP_SCRIPT="$BACKUP_DIR/backup.sh"
+    cat <<EOL > "$BACKUP_SCRIPT"
+#!/bin/bash
+
+# Системная переменная с текущей датой
+data=\$(date +%d.%m.%Y-%H:%M:%S)
+
+# Создание директории с текущей датой/временем
+mkdir -p /var/backup/\$data
+
+# Копирование настроек frr
+cp -r /etc/frr /var/backup/\$data
+
+# Копирование настроек nftables
+cp -r /etc/nftables /var/backup/\$data
+
+# Копирование настроек сетевых интерфейсов
+cp -r /etc/NetworkManager/system-connections /var/backup/\$data
+
+# Копирование настроек DHCP
+cp -r /etc/dhcp /var/backup/\$data
+
+# Переход в директорию
+cd /var/backup
+
+# Архивируем
+tar czfv "./\$data.tar.gz" ./\$data
+
+# Удаляем временную директорию
+rm -r /var/backup/\$data
+EOL
+
+    # Установка прав на выполнение
+    chmod +x "$BACKUP_SCRIPT"
+
+    echo "Backup скрипт создан: $BACKUP_SCRIPT"
+}
+
+# Функция установки Webmin
+install_webmin() {
+    echo "Установка Webmin..."
+
+    # Установка необходимых пакетов
+    dnf install -y perl perl-Net-SSLeay perl-IO-Tty
+    wget -qO /etc/yum.repos.d/webmin.repo https://download.webmin.com/download/yum/webmin.repo
+    rpm --import http://www.webmin.com/jcameron-key.asc
+    yum install -y webmin
+    # Запуск и включение службы Webmin
+    systemctl enable --now webmin
+
+    echo "Webmin успешно установлен. Доступен по адресу: https://<IP-адрес-сервера>:10000/"
+}
+
+# Функция установки Adminer
+install_adminer() {
+    echo "Установка Adminer..."
+    dnf install -y httpd mariadb-server php php-mysqlnd php-cli wget unzip
+    mkdir -p /var/www/html/adminer
+    wget -qO /var/www/html/adminer/index.php https://www.adminer.org/latest.php
+
+    echo "Настройка прав доступа для Adminer..."
+    chown -R apache:apache /var/www/html/adminer
+    chmod -R 755 /var/www/html/adminer
+
+    # Настройка прав доступа
+    chown -R apache:apache /var/www/html/adminer
+    chmod 755 /var/www/html/adminer
+
+    # Перезапуск Apache
+    systemctl restart httpd
+
+    echo "Adminer успешно установлен. Доступен по адресу: http://<IP-адрес-сервера>/adminer/"
+}
+
+# Функция установки WordPress
+install_wordpress() {
+    echo "Установка WordPress..."
+
+    # Запрос необходимых переменных с использованием значений по умолчанию
+    read -p "Введите имя базы данных (по умолчанию: $DB_NAME): " input_db_name
+    read -p "Введите имя пользователя базы данных (по умолчанию: $DB_USER): " input_db_user
+    read -p "Введите пароль для пользователя базы данных (по умолчанию: $DB_PASS): " input_db_pass
+    read -p "Введите имя администратора WordPress (по умолчанию: $ADMIN_USER): " input_admin_user
+    read -p "Введите пароль администратора WordPress (по умолчанию: $ADMIN_PASS): " input_admin_pass
+    read -p "Введите email администратора WordPress (по умолчанию: $ADMIN_EMAIL): " input_admin_email
+    read -p "Введите заголовок сайта (по умолчанию: $SITE_TITLE): " input_site_title
+    read -p "Введите URL сайта (по умолчанию: $SITE_URL): " input_site_url
+
+    # Использование значений по умолчанию, если пользователь ничего не ввел
+    DB_NAME=${input_db_name:-$DB_NAME}
+    DB_USER=${input_db_user:-$DB_USER}
+    DB_PASS=${input_db_pass:-$DB_PASS}
+    ADMIN_USER=${input_admin_user:-$ADMIN_USER}
+    ADMIN_PASS=${input_admin_pass:-$ADMIN_PASS}
+    ADMIN_EMAIL=${input_admin_email:-$ADMIN_EMAIL}
+    SITE_TITLE=${input_site_title:-$SITE_TITLE}
+    SITE_URL=${input_site_url:-$SITE_URL}
+
+    # Проверка на пустые значения
+    if [[ -z "$DB_NAME" || -z "$DB_USER" || -z "$DB_PASS" || -z "$ADMIN_USER" || -z "$ADMIN_PASS" || -z "$ADMIN_EMAIL" || -z "$SITE_TITLE" || -z "$SITE_URL" ]]; then
+        echo "Ошибка: Все поля должны быть заполнены."
+        exit 1
+    fi
+    # Обновление системы и установка необходимых компонентов
+    echo "Обновление системы и установка пакетов..."
+    dnf update -y
+    dnf install -y httpd mariadb-server php php-mysqlnd php-cli wget unzip
+    # Запуск и настройка Apache
+    echo "Настройка и запуск Apache..."
+    systemctl start httpd
+    systemctl enable httpd
+    # Настройка MariaDB
+    echo "Настройка MariaDB..."
+    systemctl start mariadb
+    systemctl enable mariadb
+    # Проверка и создание базы данных и пользователя
+    mysql -e "CREATE DATABASE IF NOT EXISTS $DB_NAME;"
+    if [ $? -ne 0 ]; then
+        echo "Ошибка: Не удалось создать базу данных $DB_NAME."
+        exit 1
+    fi
+    mysql -e "CREATE USER IF NOT EXISTS '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';"
+    if [ $? -ne 0 ]; then
+        echo "Ошибка: Не удалось создать пользователя $DB_USER."
+        exit 1
+    fi
+    mysql -e "GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'localhost';"
+    if [ $? -ne 0 ]; then
+        echo "Ошибка: Не удалось предоставить привилегии пользователю $DB_USER."
+        exit 1
+    fi
+
+    mysql -e "FLUSH PRIVILEGES;"
+
+    # Установка WordPress
+    echo "Установка WordPress..."
+    cd /var/www/html
+    wget https://wordpress.org/latest.zip
+    unzip latest.zip
+    mv wordpress/* .
+    rm -rf wordpress latest.zip
+    chown -R apache:apache /var/www/html
+    chmod -R 755 /var/www/html
+    # Создание файла конфигурации WordPress
+    echo "Настройка конфигурации WordPress..."
+    cp wp-config-sample.php wp-config.php
+    sed -i "s/database_name_here/$DB_NAME/" wp-config.php
+    sed -i "s/username_here/$DB_USER/" wp-config.php
+    sed -i "s/password_here/$DB_PASS/" wp-config.php
+    # Установка WP-CLI
+    echo "Установка WP-CLI..."
+    curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+    chmod +x wp-cli.phar
+    mv wp-cli.phar /usr/local/bin/wp
+    # Завершение настройки WordPress через WP-CLI
+    echo "Настройка WordPress через WP-CLI..."
+    wp core install --url="$SITE_URL" --title="$SITE_TITLE" --admin_user="$ADMIN_USER" --admin_password="$ADMIN_PASS" --admin_email="$ADMIN_EMAIL" --path="/var/www/html" --allow-root
+    # Добавление текста на главную страницу
+    echo "Добавление текста на главную страницу..."
+    wp post update 1 --post_title="$SITE_TITLE" --post_content="Добро пожаловать! Номер учебной группы: C1-21. Имя: Некрасов Павел." --path="/var/www/html" --allow-root
+    # Перезапуск Apache для применения изменений
+    echo "Перезапуск Apache..."
+    systemctl restart httpd
+    echo "Установка WordPress завершена. Перейдите по адресу $SITE_URL для проверки."
+}
+
 # Функция установки и настройки веб-сервера LMS Apache
 install_lms_apache() {
     # Переменные для Moodle
@@ -666,7 +913,7 @@ services:
       MYSQL_PASSWORD: $MEDIADB_PASS
       MYSQL_RANDOM_ROOT_PASSWORD: 'yes'
     volumes:
-      - dbvolume:/var/lib/mysql
+      - dbvolume:/var/lib/mariadb
 volumes:
   dbvolume:
       external: true
@@ -687,6 +934,132 @@ EOL
     docker-compose -f wiki.yml stop
     docker-compose -f wiki.yml up -d"
     read -p "Нажмите Enter для продолжения..."
+}
+
+# Функция установки и настройки сервера IPA
+install_ipa_server() {
+    echo "Установка и настройка сервера IPA..."
+
+    # Запрос имени хоста
+    read -p "Введите имя хоста (по умолчанию: hq-srv.hq.work): " new_hostname
+    HOSTNAME=${new_hostname:-hq-srv.hq.work}
+    hostnamectl set-hostname $HOSTNAME
+
+    # Установка необходимых пакетов
+    echo "Установка необходимых пакетов..."
+    dnf install -y bind bind-dyndb-ldap ipa-server ipa-server-dns ipa-server-trust-ad
+
+    # Установка сервера IPA
+    echo "Установка сервера IPA..."
+    echo "Do you want to configure integrated DNS (BIND)? [no]: пишем yes"
+    echo "На вопрос на какие сервера необходимо перенаправлять внешние DNS запросы - пишем нет"
+    echo "Do you want to configure DNS forwarders? [yes]: пишем  no"
+    echo "Do you want to search for nissing reverse zones? (yes): пишем no"
+    echo "Do you want to configure chrony with NTP server or pool address? [no]: пишем no"
+    echo "На вопрос создание обратной зоны для службы имен - пишем no"
+    echo "Continue to configure the system with these values? [no]: пишем yes"
+    ipa-server-install --mkhomedir
+
+    # Пауза для продолжения
+    read -p "!!!reboot!!! Нажмите Enter для продолжения..."
+
+    echo "Установка и настройка сервера IPA завершены."
+}
+
+# Функция установки PostgreSQL и pgAdmin4
+install_postgresql_pgadmin() {
+    echo "Установка PostgreSQL и pgAdmin4..."
+
+    # Установка необходимых пакетов
+    dnf install -y postgresql15-server pgadmin4 pgadmin4-qt pgadmin4-langpack-ru httpd python3-mod_wsgi pgadmin4-httpd
+
+    # Инициализация базы данных PostgreSQL
+    postgresql-15-setup initdb
+
+    # Запуск и включение службы PostgreSQL
+    systemctl enable postgresql-15.service --now
+
+    # Настройка прав доступа для pgAdmin4
+    mkdir -p /var/log/pgadmin4/
+    setsebool -P httpd_can_network_connect 1
+    setsebool -P httpd_can_network_connect_db 1
+    semanage fcontext -a -t httpd_sys_rw_content_t "/var/lib/pgadmin4(/.*)?"
+    semanage fcontext -a -t httpd_sys_rw_content_t "/var/log/pgadmin4(/.*)?"
+    restorecon -R /var/lib/pgadmin4/
+    restorecon -R /var/log/pgadmin4/
+    systemctl enable httpd --now
+
+    # Настройка конфигурации pgAdmin4
+    cat << EOF >> /usr/lib/pgadmin4/config_local.py 
+import os
+from config import *
+HELP_PATH = '/usr/share/doc/pgadmin4/html/'
+DATA_DIR = os.path.realpath(os.path.expanduser(u'/var/lib/pgadmin4'))
+LOG_FILE = os.path.join(DATA_DIR, 'pgadmin4.log')
+SQLITE_PATH = os.path.join(DATA_DIR, 'pgadmin4.db')
+SESSION_DB_PATH = os.path.join(DATA_DIR, 'sessions')
+STORAGE_DIR = os.path.join(DATA_DIR, 'storage')
+AZURE_CREDENTIAL_CACHE_DIR = os.path.join(DATA_DIR, 'azurecredentialcache')
+KERBEROS_CCACHE_DIR = os.path.join(DATA_DIR, 'krbccache')
+TEST_SQLITE_PATH = os.path.join(DATA_DIR, 'test_pgadmin4.db')
+EOF
+
+    # Запрос имени пользователя и пароля для pgAdmin4
+    while true; do
+        read -p "Введите email администратора pgAdmin4 (по умолчанию: $EMAIL): " input_admin_email
+        if [[ "$input_admin_email" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+            EMAIL=${input_admin_email:-$EMAIL}
+            break
+        else
+            echo "Некорректный адрес электронной почты. Пожалуйста, попробуйте снова."
+        fi
+    done
+
+    while true; do
+        read -p "Введите пароль администратора pgAdmin4 (по умолчанию: $ADMIN_PASSWORD): " input_admin_password
+        if [[ -n "$input_admin_password" ]]; then
+            ADMIN_PASSWORD=${input_admin_password:-$ADMIN_PASSWORD}
+            break
+        else
+            echo "Пароль не может быть пустым. Пожалуйста, попробуйте снова."
+        fi
+    done
+
+    python /usr/lib/pgadmin4/setup.py <<EOF
+$EMAIL
+$ADMIN_PASSWORD
+EOF
+
+    # Настройка прав доступа
+    chown -R apache:apache /var/lib/pgadmin4 /var/log/pgadmin4
+    systemctl restart httpd
+
+    # Настройка PostgreSQL
+    echo "Настройка PostgreSQL..."
+    sed -i '/^#listen_addresses = 'localhost'/c\listen_addresses = '*'' /var/lib/pgsql/15/data/postgresql.conf
+    sed -i '1 a host all all 0.0.0.0/0 md5' /var/lib/pgsql/15/data/pg_hba.conf
+
+    # Запрос пароля для пользователя postgres
+    while true; do
+        read -p "Введите новый пароль для пользователя postgres (по умолчанию: $POSTGRES_PASSWORD): " input_postgres_password
+        POSTGRES_PASSWORD=${input_postgres_password:-$POSTGRES_PASSWORD}
+        if [[ -n "$POSTGRES_PASSWORD" ]]; then
+            break
+        else
+            echo "Пароль не может быть пустым. Пожалуйста, попробуйте снова."
+        fi
+    done
+
+    su - postgres <<EOF
+psql
+ALTER USER postgres WITH ENCRYPTED PASSWORD '$POSTGRES_PASSWORD';
+EOF
+
+    # Перезапуск службы PostgreSQL
+    systemctl restart postgresql-15.service
+
+    echo "Установка PostgreSQL и pgAdmin4 завершена."
+    echo "pgAdmin4 доступен по адресу: http://<IP-адрес-сервера>/pgadmin4"
 }
 
 # Функция установки и настройки обратного прокси-сервера Nginx
@@ -733,6 +1106,43 @@ EOF
     # Перезапуск Nginx
     systemctl restart nginx
     systemctl enable --now nginx
+}
+
+# Функция установки и настройки rsyslog
+install_rsyslog() {
+    # Установка необходимых пакетов
+    dnf install -y rsyslog
+    sed -i "s/SELINUX=enforcing/SELINUX=permissive/" /etc/selinux/config
+    setenforce 0
+    systemctl enable --now rsyslog 
+    # Настрока iptables
+    iptables -A INPUT -p tcp --dport 514 -j ACCEPT
+    iptables -A INPUT -p udp --dport 514 -j ACCEPT
+    semanage port -m -t syslogd_port_t -p tcp 514
+    semanage port -m -t syslogd_port_t -p udp 514
+    # Включаем прием сообщений от клиентов
+    sed -i 's/#module(load="imudp")/module(load="imudp")/' /etc/rsyslog.conf
+    sed -i 's/#input(type="imudp" port="514")/input(type="imudp" port="514")/' /etc/rsyslog.conf
+    sed -i 's/#module(load="imtcp")/module(load="imtcp")/' /etc/rsyslog.conf
+    sed -i 's/#input(type="imtcp" port="514")/input(type="imtcp" port="514")/' /etc/rsyslog.conf
+    sed -i '38 a \$template RemoteLogs,"/var/log/rsyslog/%HOSTNAME%/%PROGRAMNAME%.log"' /etc/rsyslog.conf
+    sed -i '39 a *.* ?RemoteLogs' /etc/rsyslog.conf
+    sed -i '40 a & ~' /etc/rsyslog.conf
+    systemctl restart rsyslog.service
+    echo "Установка и настройка rsyslog завершены."
+}
+
+# Функция настройки клиента rsyslog
+configure_rsyslog_client() {
+    echo "Настройка клиента rsyslog..."
+    systemctl enable --now rsyslog 
+    # Запрос IP-адреса сервера rsyslog
+    read -p "Введите IP-адрес сервера rsyslog (по умолчанию: $RSYSLOG_SERVER): " input_rsyslog_server
+    RSYSLOG_SERVER=${input_rsyslog_server:-$RSYSLOG_SERVER}
+    echo "auth.* @@$RSYSLOG_SERVER:514" >> /etc/rsyslog.d/auth.conf
+    # Перезапуск службы rsyslog
+    systemctl restart rsyslog.service
+    echo "Клиент rsyslog настроен для отправки логов на сервер $RSYSLOG_SERVER."
 }
 
 # Функция установки и настройки BIND (DNS-сервер)
@@ -1167,11 +1577,56 @@ configure_raid0() {
     echo "UUID=$UUID $MOUNT_DIR ext4 defaults 0 0" >> /etc/fstab
 }
 
+# Функция добавления пользователей и групп SAMBA
+add_samba_users_and_groups() {
+    echo "Добавление пользователей и групп в SAMBA DC..."
+    # Запрос имени домена с значением по умолчанию
+    read -p "Введите имя домена (например, hq для user1.hq): " samba_user_domain_suffix
+    samba_user_domain_suffix=${samba_user_domain_suffix:-hq}
+
+    samba-tool user add user1.$samba_user_domain_suffix QWEasd11
+    samba-tool user add user2.$samba_user_domain_suffix QWEasd11
+    samba-tool user add user3.$samba_user_domain_suffix QWEasd11
+    samba-tool user add user4.$samba_user_domain_suffix QWEasd11
+    samba-tool user add user5.$samba_user_domain_suffix QWEasd11
+    samba-tool group add $samba_user_domain_suffix
+    samba-tool group addmembers $samba_user_domain_suffix user1.$samba_user_domain_suffix,user2.$samba_user_domain_suffix,user3.$samba_user_domain_suffix,user4.$samba_user_domain_suffix,user5.$samba_user_domain_suffix
+    samba-tool user list
+    echo "Пользователи и группы SAMBA добавлены."
+    read -p "Нажмите Enter для продолжения..."
+}
+
+# Функция добавления пользователей SAMBA из CSV
+add_samba_users_from_csv() {
+    echo "Добавление пользователей SAMBA из CSV файла..."
+    read -p "Введите путь к CSV файлу (по умолчанию: /opt/Users.csv): " FILE_PATH
+    FILE_PATH=${FILE_PATH:-/opt/Users.csv} # Use default if no input
+
+    if [ ! -f "$FILE_PATH" ]; then
+        echo "Файл $FILE_PATH не найден!"
+        read -p "Нажмите Enter для продолжения..."
+        return 1
+    fi
+
+    while IFS=';' read -r firstname lastname role phone ou street zip city country password; do
+        # Пропускаем первую строку (заголовки), если она есть
+        if [[ "$firstname" == "firstname" && "$lastname" == "lastname" ]]; then
+            continue
+        fi
+        echo "Добавление пользователя: $firstname.$lastname"
+        samba-tool user add "$firstname.$lastname" "$password"
+        # Здесь можно добавить дополнительные команды, например, добавление пользователя в группу
+        # samba-tool group addmembers "$ou" "$firstname.$lastname"
+    done < <(tail -n +1 "$FILE_PATH") # tail -n +1 to process all lines including the first if it's data
+
+    echo "Пользователи SAMBA из CSV файла добавлены."
+    read -p "Нажмите Enter для продолжения..."
+}
 
 # Основной цикл меню
 while true; do
     show_menu
-    read -p "Выберите пункт меню (1-26): " choice
+    read -p "Выберите пункт меню (1-38): " choice # Updated range
     case $choice in
         1) configure_hostname ;;
         2) configure_network ;;
@@ -1182,23 +1637,35 @@ while true; do
         7) configure_frr ;;
         8) configure_user ;;
         9) configure_ssh ;;
-        10) configure_nfs ;;
-        11) configure_nfs_client ;;
-        12) configure_chrony ;;
-        13) configure_chrony_client ;;
-        14) install_lms_apache ;;
-        15) install_mediawiki ;;
-        16) install_nginx_reverse_proxy ;;
-        17) install_bind ;;
-        18) configure_raid0 ;;
-        19) configure_raid1 ;;
-        20) configure_raid5 ;;
-        21) check_ip_and_ping ;;
-        22) configure_ansible ;;
-        23) install_samba_dc ;;
-        24) join_samba_domain ;;
-        25) configure_port_forwarding ;;
-        26) echo "Выход из программы..."; exit 0 ;;
+        10) configure_cups ;;
+        11) configure_cups_client ;;
+        12) configure_nfs ;;
+        13) configure_nfs_client ;;
+        14) configure_chrony ;;
+        15) configure_chrony_client ;;
+        16) install_postgresql_pgadmin ;;
+        17) create_backup_script ;;
+        18) install_webmin ;;
+        19) install_adminer ;;
+        20) install_wordpress ;;
+        21) install_lms_apache ;;
+        22) install_mediawiki ;;
+        23) install_ipa_server ;;
+        24) install_nginx_reverse_proxy ;;
+        25) install_rsyslog ;;
+        26) configure_rsyslog_client ;;
+        27) install_bind ;;
+        28) configure_raid0 ;;
+        29) configure_raid1 ;;
+        30) configure_raid5 ;;
+        31) check_ip_and_ping ;;
+        32) configure_ansible ;;
+        33) install_samba_dc ;;
+        34) join_samba_domain ;;
+        35) configure_port_forwarding ;;
+        36) add_samba_users_and_groups ;;
+        37) add_samba_users_from_csv ;;
+        38) echo "Выход из программы..."; exit 0 ;;
         *) echo "Неверный выбор. Нажмите Enter для продолжения..."; read ;;
     esac
 done
