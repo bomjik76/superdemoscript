@@ -40,10 +40,11 @@ show_menu() {
 # Функция для возврата в меню
 return_to_menu() {
     echo
-    read -p "Вернуться в главное меню? (y/n): " choice
+    echo -en "${GRAY}Вернуться в главное меню? (y/n): ${NC}"
+    read choice
     case "$choice" in
         y|Y) return 0 ;;
-        *) exit 0 ;;
+        *) clear; exit 0 ;;
     esac
 }
 
@@ -174,7 +175,8 @@ MOODLE_PASS="P@ssw0rd"
 MOODLE_DB="moodledb"
 # Функция настройки имени хоста
 configure_hostname() {
-    read -p "Введите новое имя хоста (по умолчанию: $HOSTNAME): " new_hostname
+    echo -e "${GRAY}Введите новое имя хоста (по умолчанию: $HOSTNAME): ${NC}"
+    read new_hostname
     HOSTNAME=${new_hostname:-$HOSTNAME}
     hostnamectl set-hostname $HOSTNAME
     echo "Имя хоста обновлено на $HOSTNAME."
@@ -183,11 +185,16 @@ configure_hostname() {
 # Функция настройки сетевых интерфейсов
 configure_network() {
     echo "Настройка сетевых интерфейсов"
-    read -p "Введите имя интерфейса 1 (по умолчанию: $INTERFACE_1): " new_if1
-    read -p "Введите имя интерфейса 2 (по умолчанию: $INTERFACE_2): " new_if2
-    read -p "Введите имя интерфейса 3 (по умолчанию: $INTERFACE_3): " new_if3
-    read -p "Введите IP-адрес для интерфейса 2 (по умолчанию: $IP2): " new_ip2
-    read -p "Введите IP-адрес для интерфейса 3 (по умолчанию: $IP3): " new_ip3
+    echo -e "${GRAY}Введите имя интерфейса 1 (по умолчанию: $INTERFACE_1): ${NC}"
+    read new_if1
+    echo -e "${GRAY}Введите имя интерфейса 2 (по умолчанию: $INTERFACE_2): ${NC}"
+    read new_if2
+    echo -e "${GRAY}Введите имя интерфейса 3 (по умолчанию: $INTERFACE_3): ${NC}"
+    read new_if3
+    echo -e "${GRAY}Введите IP-адрес для интерфейса 2 (по умолчанию: $IP2): ${NC}"
+    read new_ip2
+    echo -e "${GRAY}Введите IP-адрес для интерфейса 3 (по умолчанию: $IP3): ${NC}"
+    read new_ip3
 
     INTERFACE_1=${new_if1:-$INTERFACE_1}
     INTERFACE_2=${new_if2:-$INTERFACE_2}
@@ -206,7 +213,8 @@ configure_network() {
 # Функция настройки часового пояса
 configure_timezone() {
     echo "Текущий часовой пояс: $TIMEZONE"
-    read -p "Введите новый часовой пояс (по умолчанию: $TIMEZONE): " new_timezone
+    echo -e "${GRAY}Введите новый часовой пояс (по умолчанию: $TIMEZONE): ${NC}"
+    read new_timezone
     TIMEZONE=${new_timezone:-$TIMEZONE}
     timedatectl set-timezone $TIMEZONE
     echo "Часовой пояс обновлен на $TIMEZONE."
@@ -216,7 +224,8 @@ configure_timezone() {
 configure_nftables() {
     # Получение имени первого интерфейса в системе
     INTERFACE_1=$(ip -o link show | awk -F': ' '{print $2}' | grep -v 'lo' | head -n 1)
-    read -p "Установить и настроить nftables? (y/n): " choice
+    echo -e "${GRAY}Установить и настроить nftables? (y/n): ${NC}"
+    read choice
     case "$choice" in 
         y|Y ) 
             dnf install -y nftables
@@ -254,13 +263,19 @@ EOF
 
 # Функция настройки DHCP
 configure_dhcp() {
-    echo "Настройка параметров DHCP сервера"
-    read -p "Введите подсеть (по умолчанию: $DHCP_SUBNET): " new_subnet
-    read -p "Введите маску подсети (по умолчанию: $DHCP_NETMASK): " new_netmask
-    read -p "Введите диапазон адресов (по умолчанию: $DHCP_RANGE): " new_range
-    read -p "Введите адрес маршрутизатора (по умолчанию: $DHCP_ROUTER): " new_router
-    read -p "Введите адрес DNS сервера (по умолчанию: $DHCP_DNS): " new_dns
-    read -p "Введите доменное имя (по умолчанию: $DHCP_DOMAIN): " new_domain
+    echo -e "${GRAY}Настройка параметров DHCP сервера${NC}"
+    echo -e "${GRAY}Введите подсеть (по умолчанию: $DHCP_SUBNET): ${NC}"
+    read new_subnet
+    echo -e "${GRAY}Введите маску подсети (по умолчанию: $DHCP_NETMASK): ${NC}"
+    read new_netmask
+    echo -e "${GRAY}Введите диапазон адресов (по умолчанию: $DHCP_RANGE): ${NC}"
+    read new_range
+    echo -e "${GRAY}Введите адрес маршрутизатора (по умолчанию: $DHCP_ROUTER): ${NC}"
+    read new_router
+    echo -e "${GRAY}Введите адрес DNS сервера (по умолчанию: $DHCP_DNS): ${NC}"
+    read new_dns
+    echo -e "${GRAY}Введите доменное имя (по умолчанию: $DHCP_DOMAIN): ${NC}"
+    read new_domain
 
     DHCP_SUBNET=${new_subnet:-$DHCP_SUBNET}
     DHCP_NETMASK=${new_netmask:-$DHCP_NETMASK}
@@ -271,7 +286,7 @@ configure_dhcp() {
 
     # Применение настроек DHCP
     dnf install dhcp-server -y
-    echo "Настройка DHCP..."
+    echo -e "${GRAY}Настройка DHCP...${NC}"
     cat <<EOF > /etc/dhcp/dhcpd.conf
 default-lease-time 600;
 max-lease-time 7200;
@@ -286,17 +301,22 @@ subnet $DHCP_SUBNET netmask $DHCP_NETMASK {
 }
 EOF
     systemctl enable --now dhcpd
-    echo "DHCP настроен."
+    echo -e "${GRAY}DHCP настроен.${NC}"
 }
 
 # Функция настройки GRE туннеля
 configure_gre() {
-    echo "Настройка параметров GRE туннеля"
-    read -p "Введите локальный IP (по умолчанию: $LOCAL_IP): " new_local_ip
-    read -p "Введите удаленный IP (по умолчанию: $REMOTE_IP): " new_remote_ip
-    read -p "Введите локальный IP туннеля (по умолчанию: $TUNNEL_LOCAL_IP): " new_tunnel_local_ip
-    read -p "Введите удаленный IP туннеля (по умолчанию: $TUNNEL_REMOTE_IP): " new_tunnel_remote_ip
-    read -p "Введите имя туннеля (по умолчанию: $TUNNEL_NAME): " new_tunnel_name
+    echo -e "${GRAY}Настройка параметров GRE туннеля${NC}"
+    echo -e "${GRAY}Введите локальный IP (по умолчанию: $LOCAL_IP): ${NC}"
+    read new_local_ip
+    echo -e "${GRAY}Введите удаленный IP (по умолчанию: $REMOTE_IP): ${NC}"
+    read new_remote_ip
+    echo -e "${GRAY}Введите локальный IP туннеля (по умолчанию: $TUNNEL_LOCAL_IP): ${NC}"
+    read new_tunnel_local_ip
+    echo -e "${GRAY}Введите удаленный IP туннеля (по умолчанию: $TUNNEL_REMOTE_IP): ${NC}"
+    read new_tunnel_remote_ip
+    echo -e "${GRAY}Введите имя туннеля (по умолчанию: $TUNNEL_NAME): ${NC}"
+    read new_tunnel_name
 
     LOCAL_IP=${new_local_ip:-$LOCAL_IP}
     REMOTE_IP=${new_remote_ip:-$REMOTE_IP}
@@ -312,15 +332,18 @@ configure_gre() {
     nmcli con mod $TUNNEL_NAME +ipv4.routes "$NETWORK_Right $TUNNEL_REMOTE_IP"
     nmcli connection modify $TUNNEL_NAME ip-tunnel.ttl 64
     nmcli con up $TUNNEL_NAME
-    echo "GRE туннель настроен."
+    echo -e "${GRAY}GRE туннель настроен.${NC}"
 }
 
 # Функция настройки пользователя
 configure_user() {
     echo "Настройка системного пользователя"
-    read -p "Введите имя пользователя (по умолчанию: $USERNAME_NET): " new_username
-    read -p "Введите пароль (по умолчанию: $PASSWORD_NET): " new_password
-    read -p "Введите ID пользователя (по умолчанию: $USER_ID): " new_user_id
+    echo -e "${GRAY}Введите имя пользователя (по умолчанию: $USERNAME_NET): ${NC}"
+    read new_username
+    echo -e "${GRAY}Введите пароль (по умолчанию: $PASSWORD_NET): ${NC}"
+    read new_password
+    echo -e "${GRAY}Введите ID пользователя (по умолчанию: $USER_ID): ${NC}"
+    read new_user_id
 
     USERNAME_NET=${new_username:-$USERNAME_NET}
     PASSWORD_NET=${new_password:-$PASSWORD_NET}
@@ -338,10 +361,14 @@ configure_user() {
 # Функция настройки SSH
 configure_ssh() {
     # Запрос необходимых переменных
-    read -p "Введите порт SSH (по умолчанию: $PORT_SSH): " new_port
-    read -p "Введите имя пользователя для SSH (по умолчанию: $USERNAME_SSH): " new_username
-    read -p "Введите максимальное количество попыток входа (по умолчанию: $POPITKA): " new_max_auth_tries
-    read -p "Введите время ожидания входа (по умолчанию: 5m): " new_login_grace_time
+    echo -e "${GRAY}Введите порт SSH (по умолчанию: $PORT_SSH): ${NC}"
+    read new_port
+    echo -e "${GRAY}Введите имя пользователя для SSH (по умолчанию: $USERNAME_SSH): ${NC}"
+    read new_username
+    echo -e "${GRAY}Введите максимальное количество попыток входа (по умолчанию: $POPITKA): ${NC}"
+    read new_max_auth_tries
+    echo -e "${GRAY}Введите время ожидания входа (по умолчанию: 5m): ${NC}"
+    read new_login_grace_time
 
     PORT_SSH=${new_port:-$PORT_SSH}
     USERNAME_SSH=${new_username:-$USERNAME_SSH}
@@ -369,10 +396,14 @@ configure_frr() {
     echo "Настройка FRR с OSPF"
     
     # Запрос необходимых переменных
-    read -p "Введите имя интерфейса для OSPF (по умолчанию: $TUNNEL_NAME): " new_tunnel_name
-    read -p "Введите пароль для OSPF аутентификации: " ospf_password
-    read -p "Введите сеть для OSPF (по умолчанию: $NETWORK_Left): " new_network_left
-    read -p "Введите вторую сеть для OSPF (по умолчанию: $NETWORK_2): " new_network_2
+    echo -e "${GRAY}Введите имя интерфейса для OSPF (по умолчанию: $TUNNEL_NAME): ${NC}"
+    read new_tunnel_name
+    echo -e "${GRAY}Введите пароль для OSPF аутентификации: ${NC}"
+    read ospf_password
+    echo -e "${GRAY}Введите сеть для OSPF (по умолчанию: $NETWORK_Left): ${NC}"
+    read new_network_left
+    echo -e "${GRAY}Введите вторую сеть для OSPF (по умолчанию: $NETWORK_2): ${NC}"
+    read new_network_2
 
     HOSTNAME=$(hostname)
     TUNNEL_NAME=${new_tunnel_name:-$TUNNEL_NAME}
@@ -469,8 +500,10 @@ configure_cups() {
 # Функция настройки клиента CUPS
 configure_cups_client() {
     # Запрос необходимых переменных
-    read -p "Введите IP-адрес CUPS (по умолчанию: $CUPS_IP): " input_CUPS_IP
-    read -p "Введите имя принтера (по умолчанию: $PRINTER_NAME): " input_printer_name
+    echo -e "${GRAY}Введите IP-адрес CUPS (по умолчанию: $CUPS_IP): ${NC}"
+    read input_CUPS_IP
+    echo -e "${GRAY}Введите имя принтера (по умолчанию: $PRINTER_NAME): ${NC}"
+    read input_printer_name
     CUPS_IP=${input_CUPS_IP:-$CUPS_IP}
     PRINTER_NAME=${input_printer_name:-$PRINTER_NAME}
     # Установка клиента CUPS
@@ -484,10 +517,14 @@ configure_cups_client() {
 # Функция настройки RAID
 configure_raid1() {
     # Запрос необходимых переменных
-    read -p "Введите первый диск для RAID (по умолчанию: $DISK1): " input_disk1
-    read -p "Введите второй диск для RAID (по умолчанию: $DISK2): " input_disk2
-    read -p "Введите точку монтирования (по умолчанию: $MOUNT_DIR): " input_mount_dir
-    read -p "Введите имя RAID устройства (по умолчанию: $RAID_DEVICE): " input_raid_device
+    echo -e "${GRAY}Введите первый диск для RAID (по умолчанию: $DISK1): ${NC}"
+    read input_disk1
+    echo -e "${GRAY}Введите второй диск для RAID (по умолчанию: $DISK2): ${NC}"
+    read input_disk2
+    echo -e "${GRAY}Введите точку монтирования (по умолчанию: $MOUNT_DIR): ${NC}"
+    read input_mount_dir
+    echo -e "${GRAY}Введите имя RAID устройства (по умолчанию: $RAID_DEVICE): ${NC}"
+    read input_raid_device
 
     DISK1=${input_disk1:-$DISK1}
     DISK2=${input_disk2:-$DISK2}
@@ -517,7 +554,8 @@ configure_raid1() {
 # Функция настройки NFS
 configure_nfs() {
     # Запрос необходимых переменных
-    read -p "Введите директорию для NFS (по умолчанию: $NFS_DIR): " input_nfs_dir
+    echo -e "${GRAY}Введите директорию для NFS (по умолчанию: $NFS_DIR): ${NC}"
+    read input_nfs_dir
     NFS_DIR=${input_nfs_dir:-$NFS_DIR}
     # Установка необходимых пакетов
     dnf install -y nfs-utils nfs4-acl-tools
@@ -536,9 +574,12 @@ configure_nfs() {
 # Функция настройки клиента NFS
 configure_nfs_client() {
     # Запрос необходимых переменных
-    read -p "Введите IP адрес NFS сервера (по умолчанию: $NFS_SERVER): " input_nfs_server
-    read -p "Введите экспортированную папку (по умолчанию: $NFS_EXPORT): " input_nfs_export
-    read -p "Введите точку монтирования (по умолчанию: $MOUNT_DIRNFS): " input_mount_dir
+    echo -e "${GRAY}Введите IP адрес NFS сервера (по умолчанию: $NFS_SERVER): ${NC}"
+    read input_nfs_server
+    echo -e "${GRAY}Введите экспортированную папку (по умолчанию: $NFS_EXPORT): ${NC}"
+    read input_nfs_export
+    echo -e "${GRAY}Введите точку монтирования (по умолчанию: $MOUNT_DIRNFS): ${NC}"
+    read input_mount_dir
     NFS_SERVER=${input_nfs_server:-$NFS_SERVER}
     NFS_EXPORT=${input_nfs_export:-$NFS_EXPORT}
     MOUNT_DIRNFS=${input_mount_dir:-$MOUNT_DIRNFS}
@@ -598,16 +639,20 @@ configure_chrony() {
     sed -i 's/^server ntp4.vniiftri.ru iburst/#server ntp4.vniiftri.ru iburst/' $CHRONY_CONF
 
     # Запрос локального stratum
-    read -p "Введите значение local stratum (например, 6): " input_local_stratum
+    echo -e "${GRAY}Введите значение local stratum (например, 6): ${NC}"
+    read input_local_stratum
     local_stratum=${input_local_stratum:-$local_stratum}
     # Добавление локального сервера
     echo "server 127.0.0.1 iburst prefer" >> $CHRONY_CONF
     echo "local stratum $local_stratum" >> $CHRONY_CONF
 
     # Запрос сетевых переменных
-    read -p "Введите сеть для разрешения (например, $NETWORK_Left): " input_NETWORK_Left
-    read -p "Введите сеть офиса (например, $NETWORK_Right): " input_NETWORK_Right
-    read -p "Введите сеть туннеля (например, $NETWORK_TUNNEL): " input_NETWORK_TUNNEL
+    echo -e "${GRAY}Введите сеть для разрешения (например, $NETWORK_Left): ${NC}"
+    read input_NETWORK_Left
+    echo -e "${GRAY}Введите сеть офиса (например, $NETWORK_Right): ${NC}"
+    read input_NETWORK_Right
+    echo -e "${GRAY}Введите сеть туннеля (например, $NETWORK_TUNNEL): ${NC}"
+    read input_NETWORK_TUNNEL
     
     # Использование значений по умолчанию, если пользователь ничего не ввел
     NETWORK_Left=${input_NETWORK_Left:-$NETWORK_Left}
@@ -631,7 +676,8 @@ configure_chrony_client() {
     # Установка необходимых пакетов
     dnf install -y chrony
     # Запрос IP-адреса NTP сервера
-    read -p "Введите IP-адрес NTP сервера (по умолчанию: $CHRONY_SERVER): " input_CHRONY_SERVER
+    echo -e "${GRAY}Введите IP-адрес NTP сервера (по умолчанию: $CHRONY_SERVER): ${NC}"
+    read input_CHRONY_SERVER
     CHRONY_SERVER=${input_CHRONY_SERVER:-$CHRONY_SERVER}
 
     # Настройка конфигурации Chrony
@@ -649,7 +695,8 @@ create_backup_script() {
     echo "Создание backup скрипта..."
 
     # Запрос имени директории для резервного копирования
-    read -p "Введите директорию для резервного копирования (например, $BACKUP_DIR): " input_backup_dir
+    echo -e "${GRAY}Введите директорию для резервного копирования (например, $BACKUP_DIR): ${NC}"
+    read input_backup_dir
     BACKUP_DIR=${input_backup_dir:-$BACKUP_DIR}
     mkdir -p "$BACKUP_DIR"
 
@@ -733,14 +780,22 @@ install_wordpress() {
     echo "Установка WordPress..."
 
     # Запрос необходимых переменных с использованием значений по умолчанию
-    read -p "Введите имя базы данных (по умолчанию: $DB_NAME): " input_db_name
-    read -p "Введите имя пользователя базы данных (по умолчанию: $DB_USER): " input_db_user
-    read -p "Введите пароль для пользователя базы данных (по умолчанию: $DB_PASS): " input_db_pass
-    read -p "Введите имя администратора WordPress (по умолчанию: $ADMIN_USER): " input_admin_user
-    read -p "Введите пароль администратора WordPress (по умолчанию: $ADMIN_PASS): " input_admin_pass
-    read -p "Введите email администратора WordPress (по умолчанию: $ADMIN_EMAIL): " input_admin_email
-    read -p "Введите заголовок сайта (по умолчанию: $SITE_TITLE): " input_site_title
-    read -p "Введите URL сайта (по умолчанию: $SITE_URL): " input_site_url
+    echo -e "${GRAY}Введите имя базы данных (по умолчанию: $DB_NAME): ${NC}"
+    read input_db_name
+    echo -e "${GRAY}Введите имя пользователя базы данных (по умолчанию: $DB_USER): ${NC}"
+    read input_db_user
+    echo -e "${GRAY}Введите пароль для пользователя базы данных (по умолчанию: $DB_PASS): ${NC}"
+    read input_db_pass
+    echo -e "${GRAY}Введите имя администратора WordPress (по умолчанию: $ADMIN_USER): ${NC}"
+    read input_admin_user
+    echo -e "${GRAY}Введите пароль администратора WordPress (по умолчанию: $ADMIN_PASS): ${NC}"
+    read input_admin_pass
+    echo -e "${GRAY}Введите email администратора WordPress (по умолчанию: $ADMIN_EMAIL): ${NC}"
+    read input_admin_email
+    echo -e "${GRAY}Введите заголовок сайта (по умолчанию: $SITE_TITLE): ${NC}"
+    read input_site_title
+    echo -e "${GRAY}Введите URL сайта (по умолчанию: $SITE_URL): ${NC}"
+    read input_site_url
 
     # Использование значений по умолчанию, если пользователь ничего не ввел
     DB_NAME=${input_db_name:-$DB_NAME}
@@ -823,15 +878,19 @@ install_wordpress() {
 # Функция установки и настройки веб-сервера LMS Apache
 install_lms_apache() {
     # Переменные для Moodle
-    read -p "Введите имя пользователя Moodle (по умолчанию: $MOODLE_USER): " input_moodle_user
-    read -p "Введите пароль пользователя Moodle (по умолчанию: $MOODLE_PASS): " input_moodle_pass  
-    read -p "Введите имя базы данных Moodle (по умолчанию: $MOODLE_DB): " input_moodle_db
+    echo -e "${GRAY}Введите имя пользователя Moodle (по умолчанию: $MOODLE_USER): ${NC}"
+    read input_moodle_user
+    echo -e "${GRAY}Введите пароль пользователя Moodle (по умолчанию: $MOODLE_PASS): ${NC}"
+    read input_moodle_pass  
+    echo -e "${GRAY}Введите имя базы данных Moodle (по умолчанию: $MOODLE_DB): ${NC}"
+    read input_moodle_db
     MOODLE_USER=${input_moodle_user:-$MOODLE_USER}
     MOODLE_PASS=${input_moodle_pass:-$MOODLE_PASS}
     MOODLE_DB=${input_moodle_db:-$MOODLE_DB}
     
     # Запрос пароля root для MySQL
-    read -sp "Введите пароль root для MySQL (оставьте пустым, если пароль не установлен): " MYSQL_ROOT_PASS
+    echo -e "${GRAY}Введите пароль root для MySQL (оставьте пустым, если пароль не установлен): ${NC}"
+    read MYSQL_ROOT_PASS
     echo ""
     
     # Настройка SELinux
@@ -845,20 +904,20 @@ install_lms_apache() {
     dnf makecache
     dnf update php*
     # Установка PHP и необходимых расширений
-    echo "Установка PHP и необходимых расширений..."
+    echo -e "${GRAY}Установка PHP и необходимых расширений...${NC}"
     dnf install -y php php-mysqlnd php-pdo php-gd php-mbstring php-zip php-intl php-soap
     # Настройка php.ini
-    echo "Настройка php.ini..."
+    echo -e "${GRAY}Настройка php.ini...${NC}"
     sed -i '8i max_input_vars=6000' /etc/php.ini
     systemctl restart httpd
     systemctl restart php-fpm
     # Установка и настройка MariaDB
-    echo "Установка и настройка MariaDB..."
+    echo -e "${GRAY}Установка и настройка MariaDB...${NC}"
     dnf install -y mariadb-server mariadb
     systemctl enable mariadb --now
 
     # Автоматизированное выполнение mysql_secure_installation
-    echo "Настройка безопасности MariaDB..."
+    echo -e "${GRAY}Настройка безопасности MariaDB...${NC}"
     
     # Формируем параметр пароля для MySQL команд
     if [ -z "$MYSQL_ROOT_PASS" ]; then
@@ -892,44 +951,49 @@ EOF
     fi
 
     # Создание базы данных и пользователя
-    echo "Создание базы данных и пользователя для LMS..."
+    echo -e "${GRAY}Создание базы данных и пользователя для LMS...${NC}"
     mysql -u root $MYSQL_PWD_PARAM -e "CREATE DATABASE $MOODLE_DB DEFAULT CHARACTER SET utf8 COLLATE utf8_unicode_ci;"
     mysql -u root $MYSQL_PWD_PARAM -e "CREATE USER '$MOODLE_USER'@'localhost' IDENTIFIED BY '$MOODLE_PASS';"
     mysql -u root $MYSQL_PWD_PARAM -e "GRANT ALL ON $MOODLE_DB.* TO '$MOODLE_USER'@'localhost';"
     mysql -u root $MYSQL_PWD_PARAM -e "FLUSH PRIVILEGES;"
 
     # Установка Moodle
-    echo "Установка Moodle..."
+    echo -e "${GRAY}Установка Moodle...${NC}"
     wget https://packaging.moodle.org/stable405/moodle-latest-405.tgz -P /tmp
     tar -xzf /tmp/moodle-latest-405.tgz -C /tmp
     mv -f /tmp/moodle/{.,}* /var/www/html/
     chmod -R 0755 /var/www/html/
     chown -R apache:apache /var/www/html/
     # Создание каталога данных для Moodle
-    echo "Создание каталога данных для Moodle..."
+    echo -e "${GRAY}Создание каталога данных для Moodle...${NC}"
     mkdir /var/moodledata
     chown -R apache:apache /var/moodledata
     chmod -R 0755 /var/moodledata
     # Перезапуск Apache"
     systemctl restart httpd
 
-    echo "Перейдите по адресу http://<IP-сервера>
+    echo -e "${GRAY}Перейдите по адресу http://<IP-сервера>
     /var/moodledata
     mariadb родной
     $MOODLE_DB
     $MOODLE_USER
-    $MOODLE_PASS"
+    $MOODLE_PASS${NC}"
     read -p "Нажмите Enter для продолжения..."
 }
 
 # Функция установки и настройки MediaWiki с использованием Docker
 install_mediawiki() {
     # Запрос необходимых переменных с использованием значений по умолчанию
-    read -p "Введите порт для MediaWiki (по умолчанию: $MEDIAPORT): " input_media_port
-    read -p "Введите имя контейнера c базой данных (по умолчанию: $MEDIADB_NAME): " input_media_db_name
-    read -p "Введите название базы данных (по умолчанию: $MEDIA): " input_media
-    read -p "Введите имя пользователя базы данных (по умолчанию: $MEDIADB_USER): " input_media_db_user
-    read -p "Введите пароль для пользователя базы данных (по умолчанию: $MEDIADB_PASS): " input_media_db_pass
+    echo -e "${GRAY}Введите порт для MediaWiki (по умолчанию: $MEDIAPORT): ${NC}"
+    read input_media_port
+    echo -e "${GRAY}Введите имя контейнера c базой данных (по умолчанию: $MEDIADB_NAME): ${NC}"
+    read input_media_db_name
+    echo -e "${GRAY}Введите название базы данных (по умолчанию: $MEDIA): ${NC}"
+    read input_media
+    echo -e "${GRAY}Введите имя пользователя базы данных (по умолчанию: $MEDIADB_USER): ${NC}"
+    read input_media_db_user
+    echo -e "${GRAY}Введите пароль для пользователя базы данных (по умолчанию: $MEDIADB_PASS): ${NC}"
+    read input_media_db_pass
     MEDIAPORT=${input_media_port:-$MEDIAPORT}
     MEDIADB_NAME=${input_media_db_name:-$MEDIADB_NAME}
     MEDIA=${input_media:-$MEDIA}
@@ -991,7 +1055,8 @@ install_ipa_server() {
     echo "Установка и настройка сервера IPA..."
 
     # Запрос имени хоста
-    read -p "Введите имя хоста (по умолчанию: hq-srv.hq.work): " new_hostname
+    echo -e "${GRAY}Введите имя хоста (по умолчанию: hq-srv.hq.work): ${NC}"
+    read new_hostname
     HOSTNAME=${new_hostname:-hq-srv.hq.work}
     hostnamectl set-hostname $HOSTNAME
 
@@ -1055,8 +1120,9 @@ TEST_SQLITE_PATH = os.path.join(DATA_DIR, 'test_pgadmin4.db')
 EOF
 
     # Запрос имени пользователя и пароля для pgAdmin4
+    echo -e "${GRAY}Введите email администратора pgAdmin4 (по умолчанию: $EMAIL): ${NC}"
+    read input_admin_email
     while true; do
-        read -p "Введите email администратора pgAdmin4 (по умолчанию: $EMAIL): " input_admin_email
         if [[ "$input_admin_email" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
             EMAIL=${input_admin_email:-$EMAIL}
             break
@@ -1065,8 +1131,9 @@ EOF
         fi
     done
 
+    echo -e "${GRAY}Введите пароль администратора pgAdmin4 (по умолчанию: $ADMIN_PASSWORD): ${NC}"
+    read input_admin_password
     while true; do
-        read -p "Введите пароль администратора pgAdmin4 (по умолчанию: $ADMIN_PASSWORD): " input_admin_password
         if [[ -n "$input_admin_password" ]]; then
             ADMIN_PASSWORD=${input_admin_password:-$ADMIN_PASSWORD}
             break
@@ -1090,15 +1157,14 @@ EOF
     sed -i '1 a host all all 0.0.0.0/0 md5' /var/lib/pgsql/15/data/pg_hba.conf
 
     # Запрос пароля для пользователя postgres
-    while true; do
-        read -p "Введите новый пароль для пользователя postgres (по умолчанию: $POSTGRES_PASSWORD): " input_postgres_password
-        POSTGRES_PASSWORD=${input_postgres_password:-$POSTGRES_PASSWORD}
-        if [[ -n "$POSTGRES_PASSWORD" ]]; then
-            break
-        else
-            echo "Пароль не может быть пустым. Пожалуйста, попробуйте снова."
-        fi
-    done
+    echo -e "${GRAY}Введите новый пароль для пользователя postgres (по умолчанию: $POSTGRES_PASSWORD): ${NC}"
+    read input_postgres_password
+    POSTGRES_PASSWORD=${input_postgres_password:-$POSTGRES_PASSWORD}
+    if [[ -n "$POSTGRES_PASSWORD" ]]; then
+        break
+    else
+        echo "Пароль не может быть пустым. Пожалуйста, попробуйте снова."
+    fi
 
     su - postgres <<EOF
 psql
@@ -1115,17 +1181,23 @@ EOF
 # Функция установки и настройки обратного прокси-сервера Nginx
 install_nginx_reverse_proxy() {
     # Запрос IP-адресов и доменных имен с использованием значений по умолчанию
-    read -p "Введите IP-адрес HQ-SRV(moodle) (по умолчанию: $IPHQ_SRV): " input_ip_hq
+    echo -e "${GRAY}Введите IP-адрес HQ-SRV(moodle) (по умолчанию: $IPHQ_SRV): ${NC}"
+    read input_ip_hq
     IPHQ_SRV=${input_ip_hq:-$IPHQ_SRV}
-    read -p "Введите IP-адрес BR-SRV(mediwiki) (по умолчанию: $IPBR_SRV): " input_ip_br
+    echo -e "${GRAY}Введите IP-адрес BR-SRV(mediwiki) (по умолчанию: $IPBR_SRV): ${NC}"
+    read input_ip_br
     IPBR_SRV=${input_ip_br:-$IPBR_SRV}
-    read -p "Введите доменное имя для Moodle (по умолчанию: $name): " input_name
+    echo -e "${GRAY}Введите доменное имя для Moodle (по умолчанию: $name): ${NC}"
+    read input_name
     name=${input_name:-$name}
-    read -p "Введите доменное имя для Wiki (по умолчанию: $name2): " input_name2
+    echo -e "${GRAY}Введите доменное имя для Wiki (по умолчанию: $name2): ${NC}"
+    read input_name2
     name2=${input_name2:-$name2}
-    read -p "Введите порт Wiki (по умолчанию: $pp2): " input_pp2
+    echo -e "${GRAY}Введите порт Wiki (по умолчанию: $pp2): ${NC}"
+    read input_pp2
     pp2=${input_pp2:-$pp2}
-    read -p "Введите порт для Moodle (по умолчанию: $pp1): " input_pp1
+    echo -e "${GRAY}Введите порт для Moodle (по умолчанию: $pp1): ${NC}"
+    read input_pp1
     pp1=${input_pp1:-$pp1}
     dnf install -y nginx
     setenforce 0
@@ -1187,7 +1259,8 @@ configure_rsyslog_client() {
     echo "Настройка клиента rsyslog..."
     systemctl enable --now rsyslog 
     # Запрос IP-адреса сервера rsyslog
-    read -p "Введите IP-адрес сервера rsyslog (по умолчанию: $RSYSLOG_SERVER): " input_rsyslog_server
+    echo -e "${GRAY}Введите IP-адрес сервера rsyslog (по умолчанию: $RSYSLOG_SERVER): ${NC}"
+    read input_rsyslog_server
     RSYSLOG_SERVER=${input_rsyslog_server:-$RSYSLOG_SERVER}
     echo "auth.* @@$RSYSLOG_SERVER:514" >> /etc/rsyslog.d/auth.conf
     # Перезапуск службы rsyslog
@@ -1198,16 +1271,17 @@ configure_rsyslog_client() {
 # Функция установки и настройки BIND (DNS-сервер)
 install_bind() {
     # Переменные конфигурации с значениями по умолчанию
-    read -p "Введите имя домена (по умолчанию: $DOMAIN_NAME): " input_domain_name
+    echo -e "${GRAY}Введите имя домена (по умолчанию: $DOMAIN_NAME): ${NC}"
+    read input_domain_name
     DOMAIN_NAME=${input_domain_name:-$DOMAIN_NAME}
-    read -p "Введите внутренний IP-адрес DNS-сервера (по умолчанию: $DNS_IP): " input_dns_ip
-    DNS_IP=${input_dns_ip:-$DNS_IP}
-    read -p "Введите сеть для разрешения запросов (по умолчанию: $ALLOWED_NETWORK): " input_allowed_network
-    ALLOWED_NETWORK=${input_allowed_network:-$ALLOWED_NETWORK}
-    read -p "Введите адрес DNS-сервера пересылки (по умолчанию: $FORWARDER): " input_forwarder
-    FORWARDER=${input_forwarder:-$FORWARDER}
-    read -p "Введите email администратора (по умолчанию: $ADMIN_EMAIL): " input_admin_email
-    ADMIN_EMAIL=${input_admin_email:-$ADMIN_EMAIL}
+    echo -e "${GRAY}Введите внутренний IP-адрес DNS-сервера (по умолчанию: $DNS_IP): ${NC}"
+    read input_dns_ip
+    echo -e "${GRAY}Введите сеть для разрешения запросов (по умолчанию: $ALLOWED_NETWORK): ${NC}"
+    read input_allowed_network
+    echo -e "${GRAY}Введите адрес DNS-сервера пересылки (по умолчанию: $FORWARDER): ${NC}"
+    read input_forwarder
+    echo -e "${GRAY}Введите email администратора (по умолчанию: $ADMIN_EMAIL): ${NC}"
+    read input_admin_email
 
 dnf install -y bind bind-utils
 # Создание основного конфигурационного файла
@@ -1345,10 +1419,14 @@ read -p "Нажмите Enter для продолжения..."
 
 # Функция настройки RAID 5
 configure_raid5() {
-    read -p "автоматическое монтирование в папку: (по умолчанию: $MOUNT_DIR5): " input_MOUNT_DIR5
-    read -p "Введите первый диск для RAID (по умолчанию: $DISK1): " input_disk1
-    read -p "Введите второй диск для RAID (по умолчанию: $DISK2): " input_disk2
-    read -p "Введите третий диск для RAID (по умолчанию: $DISK3): " input_disk3
+    echo -e "${GRAY}автоматическое монтирование в папку: (по умолчанию: $MOUNT_DIR5): ${NC}"
+    read input_MOUNT_DIR5
+    echo -e "${GRAY}Введите первый диск для RAID (по умолчанию: $DISK1): ${NC}"
+    read input_disk1
+    echo -e "${GRAY}Введите второй диск для RAID (по умолчанию: $DISK2): ${NC}"
+    read input_disk2
+    echo -e "${GRAY}Введите третий диск для RAID (по умолчанию: $DISK3): ${NC}"
+    read input_disk3
     DISK1=${input_disk1:-$DISK1}
     DISK2=${input_disk2:-$DISK2}
     DISK3=${input_disk3:-$DISK3}
@@ -1375,21 +1453,29 @@ configure_raid5() {
 # Функция настройки Ansible на сервере BR-SRV
 configure_ansible() {
     # Запрос переменных у пользователя
-    read -p "Введите IP-адрес HQ-SRV (по умолчанию: $ANSIBLE_HQ_SRV_IP): " input_hq_srv_ip
+    echo -e "${GRAY}Введите IP-адрес HQ-SRV (по умолчанию: $ANSIBLE_HQ_SRV_IP): ${NC}"
+    read input_hq_srv_ip
     ANSIBLE_HQ_SRV_IP=${input_hq_srv_ip:-$ANSIBLE_HQ_SRV_IP}
-    read -p "Введите IP-адрес HQ-CLI (по умолчанию: $ANSIBLE_HQ_CLI_IP): " input_hq_cli_ip
+    echo -e "${GRAY}Введите IP-адрес HQ-CLI (по умолчанию: $ANSIBLE_HQ_CLI_IP): ${NC}"
+    read input_hq_cli_ip
     ANSIBLE_HQ_CLI_IP=${input_hq_cli_ip:-$ANSIBLE_HQ_CLI_IP}
-    read -p "Введите IP-адрес HQ-RTR (по умолчанию: $ANSIBLE_HQ_RTR_IP): " input_hq_rtr_ip
+    echo -e "${GRAY}Введите IP-адрес HQ-RTR (по умолчанию: $ANSIBLE_HQ_RTR_IP): ${NC}"
+    read input_hq_rtr_ip
     ANSIBLE_HQ_RTR_IP=${input_hq_rtr_ip:-$ANSIBLE_HQ_RTR_IP}
-    read -p "Введите IP-адрес BR-RTR (по умолчанию: $ANSIBLE_BR_RTR_IP): " input_br_rtr_ip
+    echo -e "${GRAY}Введите IP-адрес BR-RTR (по умолчанию: $ANSIBLE_BR_RTR_IP): ${NC}"
+    read input_br_rtr_ip
     ANSIBLE_BR_RTR_IP=${input_br_rtr_ip:-$ANSIBLE_BR_RTR_IP}
-    read -p "Введите порт SSH (по умолчанию: $ANSIBLE_SSH_PORT): " input_ssh_port
+    echo -e "${GRAY}Введите порт SSH (по умолчанию: $ANSIBLE_SSH_PORT): ${NC}"
+    read input_ssh_port
     ANSIBLE_SSH_PORT=${input_ssh_port:-$ANSIBLE_SSH_PORT}
-    read -p "Введите имя пользователя для SSH (по умолчанию: $ANSIBLE_SSH_USER): " input_ssh_user
+    echo -e "${GRAY}Введите имя пользователя для SSH (по умолчанию: $ANSIBLE_SSH_USER): ${NC}"
+    read input_ssh_user
     ANSIBLE_SSH_USER=${input_ssh_user:-$ANSIBLE_SSH_USER}
-    read -p "Введите имя пользователя для HQ-CLI (по умолчанию: $ANSIBLE_USER_CLI): " input_user_cli
+    echo -e "${GRAY}Введите имя пользователя для HQ-CLI (по умолчанию: $ANSIBLE_USER_CLI): ${NC}"
+    read input_user_cli
     ANSIBLE_USER_CLI=${input_user_cli:-$ANSIBLE_USER_CLI}
-    read -p "Введите имя пользователя для HQ-RTR и BR-RTR (по умолчанию: $ANSIBLE_USER_RTR): " input_user_rtr
+    echo -e "${GRAY}Введите имя пользователя для HQ-RTR и BR-RTR (по умолчанию: $ANSIBLE_USER_RTR): ${NC}"
+    read input_user_rtr
     ANSIBLE_USER_RTR=${input_user_rtr:-$ANSIBLE_USER_RTR}
     # Установка Ansible
     dnf install -y ansible
@@ -1433,14 +1519,17 @@ EOF
 # Функция установки и настройки SAMBA DC
 install_samba_dc() {
     # Запрос имени домена с значением по умолчанию
-    read -p "Введите имя домена (по умолчанию: $domain_name): " input_domain_name
+    echo -e "${GRAY}Введите имя домена (по умолчанию: $domain_name): ${NC}"
+    read input_domain_name
     domain_name=${input_domain_name:-$domain_name}
     DDDD=${domain_name^^}  # Преобразование в верхний регистр
-    read -p "Введите имя контроллера домена (по умолчанию: $dc_name): " input_dc_name
+    echo -e "${GRAY}Введите имя контроллера домена (по умолчанию: $dc_name): ${NC}"
+    read input_dc_name
     dc_name=${input_dc_name:-$dc_name}
-    read -p "Введите IP-адрес контроллера домена (по умолчанию: $dc_ip): " input_dc_ip
-    dc_ip=${input_dc_ip:-$dc_ip}
-    read -p "Введите пароль администратора домена (по умолчанию: $sambaps): " input_sambaps
+    echo -e "${GRAY}Введите IP-адрес контроллера домена (по умолчанию: $dc_ip): ${NC}"
+    read input_dc_ip
+    echo -e "${GRAY}Введите пароль администратора домена (по умолчанию: $sambaps): ${NC}"
+    read input_sambaps
     sambaps=${input_sambaps:-$sambaps}
     
 cat > /etc/resolv.conf << EOF
@@ -1552,13 +1641,16 @@ read -p "Нажмите Enter для продолжения..."
 # Функция настройки статической трансляции портов
 configure_port_forwarding() {
     # Запрос IP-адреса и портов с значениями по умолчанию
-    read -p "Введите IP-адрес роутера для проброса порта (по умолчанию: $ip11): " input_ip11
+    echo -e "${GRAY}Введите IP-адрес роутера для проброса порта (по умолчанию: $ip11): ${NC}"
+    read input_ip11
     ip11=${input_ip11:-$ip11}
-    read -p "Введите порт роутера для проброса (по умолчанию: $portp): " input_portp
-    portp=${input_portp:-$portp}
-    read -p "Введите IP-адрес сервера на кого пробросить порт  (по умолчанию: $ip22): " input_ip22
+    echo -e "${GRAY}Введите порт роутера для проброса (по умолчанию: $portp): ${NC}"
+    read input_portp
+    echo -e "${GRAY}Введите IP-адрес сервера на кого пробросить порт  (по умолчанию: $ip22): ${NC}"
+    read input_ip22
     ip22=${input_ip22:-$ip22}
-    read -p "Введите порт сервера для проброса (по умолчанию: $portp2): " input_portp2
+    echo -e "${GRAY}Введите порт сервера для проброса (по умолчанию: $portp2): ${NC}"
+    read input_portp2
     portp2=${input_portp2:-$portp2}
     # Добавление правил в существующий файл nftables
     cat >> /etc/nftables/isp.nft << EOF
@@ -1577,12 +1669,15 @@ EOF
 # Функция настройки клиента для входа в домен Samba DC
 join_samba_domain() {
     # Запрос имени домена
-    read -p "Введите имя домена (по умолчанию: $domain_name): " input_domain_name
+    echo -e "${GRAY}Введите имя домена (по умолчанию: $domain_name): ${NC}"
+    read input_domain_name
     domain_name=${input_domain_name:-$domain_name}
     # Запрос имени контроллера домена
-    read -p "Введите имя контроллера домена (по умолчанию: $dc_name): " input_dc_name
+    echo -e "${GRAY}Введите имя контроллера домена (по умолчанию: $dc_name): ${NC}"
+    read input_dc_name
     dc_name=${input_dc_name:-$dc_name}
-    read -p "Введите IP-адрес контроллера домена (по умолчанию: $dc_ip): " input_dc_ip
+    echo -e "${GRAY}Введите IP-адрес контроллера домена (по умолчанию: $dc_ip): ${NC}"
+    read input_dc_ip
     dc_ip=${input_dc_ip:-$dc_ip}
 
 cat > /etc/resolv.conf << EOF
@@ -1597,10 +1692,14 @@ EOF
 # Функция настройки RAID 0
 configure_raid0() {
     # Запрос необходимых переменных
-    read -p "Введите первый диск для RAID (по умолчанию: $DISK1): " input_disk1
-    read -p "Введите второй диск для RAID (по умолчанию: $DISK2): " input_disk2
-    read -p "Введите точку монтирования (по умолчанию: $MOUNT_DIR): " input_mount_dir
-    read -p "Введите имя RAID устройства (по умолчанию: $RAID_DEVICE): " input_raid_device
+    echo -e "${GRAY}Введите первый диск для RAID (по умолчанию: $DISK1): ${NC}"
+    read input_disk1
+    echo -e "${GRAY}Введите второй диск для RAID (по умолчанию: $DISK2): ${NC}"
+    read input_disk2
+    echo -e "${GRAY}Введите точку монтирования (по умолчанию: $MOUNT_DIR): ${NC}"
+    read input_mount_dir
+    echo -e "${GRAY}Введите имя RAID устройства (по умолчанию: $RAID_DEVICE): ${NC}"
+    read input_raid_device
 
     DISK1=${input_disk1:-$DISK1}
     DISK2=${input_disk2:-$DISK2}
@@ -1631,7 +1730,8 @@ configure_raid0() {
 add_samba_users_and_groups() {
     echo "Добавление пользователей и групп в SAMBA DC..."
     # Запрос имени домена с значением по умолчанию
-    read -p "Введите имя домена (например, hq для user1.hq): " samba_user_domain_suffix
+    echo -e "${GRAY}Введите имя домена (например, hq для user1.hq): ${NC}"
+    read samba_user_domain_suffix
     samba_user_domain_suffix=${samba_user_domain_suffix:-hq}
 
     samba-tool user add user1.$samba_user_domain_suffix QWEasd11
@@ -1649,7 +1749,8 @@ add_samba_users_and_groups() {
 # Функция добавления пользователей SAMBA из CSV
 add_samba_users_from_csv() {
     echo "Добавление пользователей SAMBA из CSV файла..."
-    read -p "Введите путь к CSV файлу (по умолчанию: /opt/Users.csv): " FILE_PATH
+    echo -e "${GRAY}Введите путь к CSV файлу (по умолчанию: /opt/Users.csv): ${NC}"
+    read FILE_PATH
     FILE_PATH=${FILE_PATH:-/opt/Users.csv} # Use default if no input
 
     if [ ! -f "$FILE_PATH" ]; then
@@ -1736,7 +1837,7 @@ while true; do
         36) add_samba_users_and_groups; return_to_menu ;;
         37) add_samba_users_from_csv; return_to_menu ;;
         38) create_sudoers_hq; return_to_menu ;;
-        39) echo "Выход из программы..."; exit 0 ;;
+        39) clear; echo "Выход из программы..."; exit 0 ;;
         *) echo "Неверный выбор."; return_to_menu ;;
     esac
 done

@@ -327,7 +327,8 @@ configure_user() {
     useradd -m -s /bin/bash -u "$USER_ID" "$USERNAME_NET"
     echo "$USERNAME_NET:$PASSWORD_NET" | chpasswd
     usermod -aG wheel "$USERNAME_NET"
-    echo "$USERNAME_NET ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/$USERNAME_NET"
+    sed -i '110 a\'$USERNAME_NET' ALL=(ALL) NOPASSWD:ALL' "/etc/sudoers.d/$USERNAME_NET"
+    sed -i '110 a\'$USERNAME_NET' ALL=(ALL) NOPASSWD:ALL' "/etc/sudoers"
     echo "Пользователь $USERNAME_NET создан."
 }
 
