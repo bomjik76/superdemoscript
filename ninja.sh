@@ -899,7 +899,7 @@ install_lms_apache() {
     # Установка веб-сервера Apache
     dnf install -y httpd
     systemctl enable httpd --now
-    dnf install -y php83-release
+    dnf install -y php81-release
     dnf clean all
     dnf makecache
     dnf update php*
@@ -959,7 +959,7 @@ EOF
 
     # Установка Moodle
     echo -e "${GRAY}Установка Moodle...${NC}"
-    wget https://packaging.moodle.org/stable405/moodle-latest-405.tgz -P /tmp
+    wget https://download.moodle.org/download.php/stable405/moodle-latest-405.tgz -P /tmp
     tar -xzf /tmp/moodle-latest-405.tgz -C /tmp
     mv -f /tmp/moodle/{.,}* /var/www/html/
     chmod -R 0755 /var/www/html/
@@ -1786,6 +1786,152 @@ EOF
     echo "Файл /etc/sudoers.d/hq успешно создан."
     echo "Пользователи группы hq могут выполнять команды cat, grep и id с правами sudo без пароля."
 }
+
+# --- New Task Functions ---
+isp() {
+    configure_hostname
+    configure_timezone
+    configure_nftables
+    clear
+    exit 0
+}
+
+hq-rtr() {
+    configure_hostname
+    configure_timezone
+    configure_nftables
+    configure_dhcp
+    configure_frr
+    configure_gre
+    configure_user
+    clear
+    exit 0
+}
+
+br-rtr() {
+    configure_hostname
+    configure_timezone
+    configure_nftables
+    configure_frr
+    configure_gre
+    configure_user
+    clear
+    exit 0
+}
+
+hq-srv() {
+    configure_hostname
+    configure_timezone
+    configure_user
+    configure_ssh
+    install_bind
+    clear
+    exit 0
+}
+
+cli() {
+    configure_hostname
+    configure_timezone
+    clear
+    exit 0
+}
+
+br-srv() {
+    configure_hostname
+    configure_timezone
+    configure_user
+    configure_ssh
+    clear
+    exit 0
+}
+
+hq-rtr2() {
+    configure_chrony
+    install_nginx_reverse_proxy
+    configure_port_forwarding
+    clear
+    exit 0
+}
+
+br-rtr2() {
+    configure_chrony_client
+    clear
+    exit 0
+}
+
+hq-srv2() {
+    configure_chrony_client
+    install_lms_apache
+    configure_nfs
+    clear
+    exit 0
+}
+
+cli2() {
+    configure_chrony_client
+    configure_nfs_client
+    create_sudoers_hq
+    clear
+    exit 0
+}
+
+br-srv2() {
+    configure_chrony_client
+    install_mediawiki
+    configure_ansible
+    install_samba_dc
+    add_samba_users_and_groups
+    add_samba_users_from_csv
+    configure_port_forwarding
+    clear
+    exit 0
+}
+
+# --- Main execution ---
+if [ -n "$1" ]; then
+    case "$1" in
+        -isp)
+            isp
+            ;;
+        -hq-rtr)
+            hq-rtr
+            ;;
+        -br-rtr)
+            br_r
+            ;;
+        -hq-srv)
+            hq-srv
+            ;;
+        -cli)
+            cli
+            ;;
+        -br_srv)
+            br_srv
+            ;;
+        -hq-rtr2)
+            hq-rtr2
+            ;;
+        -br-rtr2)
+            br_r2
+            ;;
+        -hq-srv2)
+            hq-srv2
+            ;;
+        -cli2)
+            cli2
+            ;;
+        -br-srv2)
+            br-srv2
+            ;;
+        *)
+            echo "Usage: $0 [--run_task_N]"
+            echo "Available tasks: --isp to --isp2"
+            echo "If no task is specified, no operation will be performed beyond this message."
+            ;;
+    esac
+else
+    echo "юзай --"
+fi
 
 # Основной цикл меню
 while true; do
