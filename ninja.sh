@@ -1897,7 +1897,7 @@ if [ -n "$1" ]; then
             hq-rtr
             ;;
         -br-rtr)
-            br_r
+            br-rtr
             ;;
         -hq-srv)
             hq-srv
@@ -1905,14 +1905,14 @@ if [ -n "$1" ]; then
         -cli)
             cli
             ;;
-        -br_srv)
-            br_srv
+        -br-srv)
+            br-srv
             ;;
         -hq-rtr2)
             hq-rtr2
             ;;
         -br-rtr2)
-            br_r2
+            br-rtr2
             ;;
         -hq-srv2)
             hq-srv2
