@@ -959,7 +959,7 @@ EOF
 
     # Установка Moodle
     echo -e "${GRAY}Установка Moodle...${NC}"
-    wget https://download.moodle.org/download.php/stable405/moodle-latest-405.tgz -P /tmp
+    wget https://download.moodle.org/download.php/direct/stable405/moodle-latest-405.tgz -P /tmp
     tar -xzf /tmp/moodle-latest-405.tgz -C /tmp
     mv -f /tmp/moodle/{.,}* /var/www/html/
     chmod -R 0755 /var/www/html/
