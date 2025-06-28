@@ -7,29 +7,29 @@ show_menu() {
     GRAY='\033[90m'
     NC='\033[0m' # No Color
     
-    echo -e "${GRAY}1. Настроить имя хоста${NC}"
-    echo -e "${GRAY}3. Настроить часовой пояс${NC}"
-    echo -e "${GRAY}4. Установить и настроить nftables${NC}"
-    echo -e "${GRAY}5. Настроить DHCP сервер${NC}"
-    echo -e "${GRAY}6. Настроить GRE туннель${NC}"
-    echo -e "${GRAY}7. Настроить FRR (OSPF)${NC}"
+    echo -e "${GRAY}1. имя хоста${NC}"
+    echo -e "${GRAY}3. часовой пояс${NC}"
+    echo -e "${GRAY}4. nftables${NC}"
+    echo -e "${GRAY}5. DHCP сервер${NC}"
+    echo -e "${GRAY}6. GRE туннель${NC}"
+    echo -e "${GRAY}7. FRR (OSPF)${NC}"
     echo -e "${GRAY}8. Создать системного пользователя${NC}"
-    echo -e "${GRAY}9. Настроить SSH${NC}"
-    echo -e "${GRAY}12. Настроить NFS${NC}"
-    echo -e "${GRAY}13. Настроить клиента NFS${NC}"
-    echo -e "${GRAY}14. Настроить Chrony${NC}"
-    echo -e "${GRAY}15. Настроить клиента Chrony${NC}"
-    echo -e "${GRAY}21. Установить LMS Apache${NC}"
-    echo -e "${GRAY}22. Установить MediaWiki${NC}"
-    echo -e "${GRAY}24. Установить обратный прокси-сервер Nginx${NC}"
-    echo -e "${GRAY}27. Установить и настроить BIND${NC}"
-    echo -e "${GRAY}28. Настроить RAID0${NC}"
-    echo -e "${GRAY}29. Настроить RAID1${NC}"
-    echo -e "${GRAY}30. Настроить RAID5${NC}"
-    echo -e "${GRAY}32. Настроить Ansible${NC}"
-    echo -e "${GRAY}33. Установить и настроить SAMBA DC${NC}"
+    echo -e "${GRAY}9. SSH${NC}"
+    echo -e "${GRAY}12. NFS${NC}"
+    echo -e "${GRAY}13. клиента NFS${NC}"
+    echo -e "${GRAY}14. Chrony${NC}"
+    echo -e "${GRAY}15. клиента Chrony${NC}"
+    echo -e "${GRAY}21.LMS Apache${NC}"
+    echo -e "${GRAY}22. MediaWiki${NC}"
+    echo -e "${GRAY}24.обратный прокси-сервер Nginx${NC}"
+    echo -e "${GRAY}27. BIND${NC}"
+    echo -e "${GRAY}28. RAID0${NC}"
+    echo -e "${GRAY}29. RAID1${NC}"
+    echo -e "${GRAY}30. RAID5${NC}"
+    echo -e "${GRAY}32. Ansible${NC}"
+    echo -e "${GRAY}33. SAMBA DC${NC}"
     echo -e "${GRAY}34. Войти в SAMBA DC${NC}"
-    echo -e "${GRAY}35. Настроить статическую трансляцию портов${NC}"
+    echo -e "${GRAY}35. статическую трансляцию портов${NC}"
     echo -e "${GRAY}36. Добавить пользователей и группы SAMBA${NC}"
     echo -e "${GRAY}37. Добавить пользователей SAMBA из CSV${NC}"
     echo -e "${GRAY}38. Создать файл sudoers для группы hq${NC}"
@@ -224,17 +224,11 @@ configure_timezone() {
 configure_nftables() {
     # Получение имени первого интерфейса в системе
     INTERFACE_1=$(ip -o link show | awk -F': ' '{print $2}' | grep -v 'lo' | head -n 1)
-    echo -e "${GRAY}Установить и настроить nftables? (y/n): ${NC}"
-    read choice
-    case "$choice" in 
-        y|Y ) 
-            dnf install -y nftables
-            
-            # Создание конфигурации nftables
-            CONFIG_FILE1="/etc/nftables/isp.nft"
-            CONFIG_FILE2="/etc/sysconfig/nftables.conf"
-            
-            cat > $CONFIG_FILE1 << EOF
+    dnf install -y nftables
+    # Создание конфигурации nftables
+    CONFIG_FILE1="/etc/nftables/isp.nft"
+    CONFIG_FILE2="/etc/sysconfig/nftables.conf"
+    cat > $CONFIG_FILE1 << EOF
 table inet nat {
     chain POSTROUTING {
         type nat hook postrouting priority srcnat;
@@ -242,23 +236,17 @@ table inet nat {
     }
 }
 EOF
-
-            # Добавление include в nftables.conf
-            INCLUDE_LINE='include "/etc/nftables/isp.nft"'
-            if ! grep -Fxq "$INCLUDE_LINE" "$CONFIG_FILE2"; then
-                echo "$INCLUDE_LINE" | sudo tee -a "$CONFIG_FILE2"
-            fi
-
-            # Запуск и автозагрузка nftables
-            systemctl enable --now nftables
-
-            # Включение IP-форвардинга
-            echo net.ipv4.ip_forward=1 > /etc/sysctl.conf
-            sysctl -p
-            echo "nftables настроены."
-            ;;
-        * ) echo "Настройка nftables отменена.";;
-    esac
+    # Добавление include в nftables.conf
+    INCLUDE_LINE='include "/etc/nftables/isp.nft"'
+    if ! grep -Fxq "$INCLUDE_LINE" "$CONFIG_FILE2"; then
+        echo "$INCLUDE_LINE" | sudo tee -a "$CONFIG_FILE2"
+    fi
+    # Запуск и автозагрузка nftables
+    systemctl enable --now nftables
+    # Включение IP-форвардинга
+    echo net.ipv4.ip_forward=1 > /etc/sysctl.conf
+    sysctl -p
+    echo "nftables настроены."
 }
 
 # Функция настройки DHCP
@@ -266,7 +254,7 @@ configure_dhcp() {
     echo -e "${GRAY}Настройка параметров DHCP сервера${NC}"
     echo -e "${GRAY}Введите подсеть (по умолчанию: $DHCP_SUBNET): ${NC}"
     read new_subnet
-    echo -e "${GRAY}Введите маску подсети (по умолчанию: $DHCP_NETMASK): ${NC}"
+    echo -e "${GRAY}Введите маску подсети (по умолчанию 27: $DHCP_NETMASK): ${NC}"
     read new_netmask
     echo -e "${GRAY}Введите диапазон адресов (по умолчанию: $DHCP_RANGE): ${NC}"
     read new_range
@@ -1276,18 +1264,22 @@ install_bind() {
     DOMAIN_NAME=${input_domain_name:-$DOMAIN_NAME}
     echo -e "${GRAY}Введите внутренний IP-адрес DNS-сервера (по умолчанию: $DNS_IP): ${NC}"
     read input_dns_ip
+    DNS_IP=${input_dns_ip:-$DNS_IP}
     echo -e "${GRAY}Введите сеть для разрешения запросов (по умолчанию: $ALLOWED_NETWORK): ${NC}"
     read input_allowed_network
+    ALLOWED_NETWORK=${input_allowed_network:-$ALLOWED_NETWORK}
     echo -e "${GRAY}Введите адрес DNS-сервера пересылки (по умолчанию: $FORWARDER): ${NC}"
     read input_forwarder
+    FORWARDER=${input_forwarder:-$FORWARDER}
     echo -e "${GRAY}Введите email администратора (по умолчанию: $ADMIN_EMAIL): ${NC}"
     read input_admin_email
+    ADMIN_EMAIL=${input_admin_email:-$ADMIN_EMAIL}
 
 dnf install -y bind bind-utils
 # Создание основного конфигурационного файла
 cat > /etc/named.conf << EOF
 options {
-    listen-on port 53 { $DNS_IP; };
+    listen-on port 53 { any; };
     listen-on-v6 port 53 { none; };
     directory     "/var/named";
     dump-file     "/var/named/data/cache_dump.db";
@@ -1362,8 +1354,8 @@ br-rtr          IN  A       ${DNS_IP}
 hq-srv          IN  A       ${DNS_IP}
 hq-cli          IN  A       ${DNS_IP}
 br-srv          IN  A       ${DNS_IP}
-moodle          IN  CNAME   hq-rtr
-wiki            IN  CNAME   hq-rtr
+moodle          CNAME   hq-rtr.${DOMAIN_NAME}.
+wiki            CNAME   hq-rtr.${DOMAIN_NAME}.
 EOF
 
 # Установка правильных разрешений
@@ -1399,8 +1391,7 @@ if systemctl is-active --quiet firewalld; then
     firewall-cmd --reload
 fi
 # Запуск и включение службы
-systemctl enable named
-systemctl start named
+systemctl enable --now named
 echo "Проверка конфигурации..."
 # Проверка конфигурации
 named-checkconf
@@ -1528,6 +1519,7 @@ install_samba_dc() {
     dc_name=${input_dc_name:-$dc_name}
     echo -e "${GRAY}Введите IP-адрес контроллера домена (по умолчанию: $dc_ip): ${NC}"
     read input_dc_ip
+    dc_ip=${input_dc_ip:-$dc_ip}
     echo -e "${GRAY}Введите пароль администратора домена (по умолчанию: $sambaps): ${NC}"
     read input_sambaps
     sambaps=${input_sambaps:-$sambaps}
